@@ -15,7 +15,7 @@ type HttpServer(headers, body, requestEnd) as this =
 
     let svr = TcpServer.Create((fun (data,svr,sd) -> 
         let parser =
-            let parserDelegate = ParserDelegate(requestBegan =(fun (a,b) -> headers(a,b,this,sd)), 
+            let parserDelegate = ParserDelegate(requestBegan = (fun (a,b) -> headers(a,b,this,sd)), 
                                                 requestBody = (fun data -> (body(data, svr,sd))), 
                                                 requestEnded = (fun req -> (requestEnd(req, svr, sd))))
             HttpParser(parserDelegate)
@@ -30,9 +30,9 @@ type HttpServer(headers, body, requestEnd) as this =
         
     member h.Start(port) = svr.Listen(IPAddress.Loopback, port)
 
-    member h.Send(client, (response:string), keepAlive) = 
+    member h.Send(client, response: string, close) = 
         let encoded = Encoding.ASCII.GetBytes(response)
-        svr.Send(client, encoded, keepAlive)
+        svr.Send(client, encoded, close)
 
     interface IDisposable with
         member h.Dispose() =

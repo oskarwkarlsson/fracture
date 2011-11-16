@@ -18,7 +18,7 @@ let inline closeConnection (socket:Socket) =
     finally socket.Close()
 
 /// Sends data to the socket cached in the SAEA given, using the SAEA's buffer
-let inline send client completed (getArgs: unit -> SocketAsyncEventArgs) bufferLength (msg: byte[]) keepAlive = 
+let inline send client completed (getArgs: unit -> SocketAsyncEventArgs) bufferLength (msg: byte[]) close = 
     let rec loop offset =
         if offset < msg.Length then
             let args = getArgs()
@@ -31,7 +31,7 @@ let inline send client completed (getArgs: unit -> SocketAsyncEventArgs) bufferL
                 loop (offset + amountToSend)
             else Console.WriteLine(sprintf "Connection lost to%A" client.RemoteEndPoint)
     loop 0
-    if not keepAlive then
+    if close then
         let args = getArgs()
         args.AcceptSocket <- client
         client.Shutdown(SocketShutdown.Both)

@@ -137,10 +137,10 @@ type TcpServer(poolSize, perOperationBufferSize, acceptBacklogCount, received, ?
             listeningSocket.AcceptAsyncSafe(processAccept, connectionPool.CheckOut())
 
     ///Sends the specified message to the client.
-    member s.Send(clientEndPoint, msg, keepAlive) =
+    member s.Send(clientEndPoint, msg, close) =
         let success, client = clients.TryGetValue(clientEndPoint)
         if success then 
-            send client completed bocketPool.CheckOut perOperationBufferSize msg keepAlive
+            send client completed bocketPool.CheckOut perOperationBufferSize msg close
         else failwith "could not find client %"
         
     member s.Dispose() = (s :> IDisposable).Dispose()
