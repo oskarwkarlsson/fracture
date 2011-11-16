@@ -37,11 +37,12 @@
   <ItemGroup>
     <None Include="packages.config" />
     <Compile Include="SocketExtensions.fs" />
-    <Compile Include="Pipelets.fs" />
+    <Compile Include="Threading.fs" />
+    <Compile Include="Common.fs" />
     <Compile Include="ObjectPool.fs" />
     <Compile Include="BocketPool.fs" />
-    <Compile Include="Common.fs" />
-    <Compile Include="Threading.fs" />
+    <Compile Include="Pipelets.fs" />
+    <Compile Include="Sockets.fs" />
     <Compile Include="TcpClient.fs" />
     <Compile Include="TcpServer.fs" />
     <Compile Include="RemoteAgent.fs" />
