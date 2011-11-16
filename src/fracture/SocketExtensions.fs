@@ -39,10 +39,16 @@ type Socket with
     member s.ReceiveAsyncSafe(callback, args) = invoke(s.ReceiveAsync, callback, args) 
     member s.SendAsyncSafe(callback, args) = invoke(s.SendAsync, callback, args) 
     member s.ConnectAsyncSafe(callback, args) = invoke(s.ConnectAsync, callback, args)
-    member s.DisconnectAsyncSafe(callback, args) = invoke(s.DisconnectAsync, callback, args)
+    member s.DisconnectAsyncSafe(callback, args: SocketAsyncEventArgs, ?reuseSocket) =
+        let reuseSocket = defaultArg reuseSocket false
+        args.DisconnectReuseSocket <- reuseSocket
+        invoke(s.DisconnectAsync, callback, args)
 
     member s.AsyncAccept(args) = invokeAsync s.AcceptAsync args <| fun args -> args.AcceptSocket
     member s.AsyncReceive(args) = invokeAsync s.ReceiveAsync args <| fun args -> BS(args.Buffer, args.Offset, args.Count)
     member s.AsyncSend(args) = invokeAsync s.SendAsync args ignore
     member s.AsyncConnect(args) = invokeAsync s.ConnectAsync args ignore
-    member s.AsyncDisconnect(args) = invokeAsync s.DisconnectAsync args ignore
+    member s.AsyncDisconnect(args: SocketAsyncEventArgs, ?reuseSocket) =
+        let reuseSocket = defaultArg reuseSocket false
+        args.DisconnectReuseSocket <- reuseSocket
+        invokeAsync s.DisconnectAsync args ignore
