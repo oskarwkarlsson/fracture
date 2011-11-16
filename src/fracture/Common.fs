@@ -12,18 +12,10 @@ let inline createSocket (ipEndPoint) =
     socket.Bind(ipEndPoint);socket
 
 let inline closeConnection (socket:Socket) =
-    try socket.Shutdown(SocketShutdown.Both)
-    finally socket.Close()
-
-let inline disposeSocket (socket:Socket) =
     try
-        socket.Shutdown(SocketShutdown.Both)
-        socket.Disconnect(false)
-        socket.Close()
-    with
-        // note: the calls above can sometimes result in SocketException.
-        :? System.Net.Sockets.SocketException -> ()
-    socket.Dispose()
+        if socket <> null then
+            socket.Shutdown(SocketShutdown.Both)
+    finally socket.Close()
 
 /// Sends data to the socket cached in the SAEA given, using the SAEA's buffer
 let inline send client completed (getArgs: unit -> SocketAsyncEventArgs) bufferLength (msg: byte[]) keepAlive = 
@@ -38,15 +30,15 @@ let inline send client completed (getArgs: unit -> SocketAsyncEventArgs) bufferL
                 client.SendAsyncSafe(completed, args)
                 loop (offset + amountToSend)
             else Console.WriteLine(sprintf "Connection lost to%A" client.RemoteEndPoint)
-    loop 0  
-    if not keepAlive then 
+    loop 0
+    if not keepAlive then
         let args = getArgs()
-        args.UserToken <- client
+        args.AcceptSocket <- client
         client.Shutdown(SocketShutdown.Both)
         client.DisconnectAsyncSafe(completed, args)
     
 let inline acquireData(args: SocketAsyncEventArgs)= 
     //process received data
-    let data : byte[] = Array.zeroCreate args.BytesTransferred
+    let data = Array.zeroCreate<byte> args.BytesTransferred
     Buffer.BlockCopy(args.Buffer, args.Offset, data, 0, data.Length)
     data

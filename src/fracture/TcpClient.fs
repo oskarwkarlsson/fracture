@@ -21,7 +21,7 @@ type TcpClient(ipEndPoint, poolSize, size) =
     let cleanUp disposing = 
         if not !disposed then
             if disposing then
-                disposeSocket listeningSocket
+                closeConnection listeningSocket
                 pool.Dispose()
             disposed := true
 

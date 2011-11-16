@@ -14,7 +14,7 @@ type SocketListener(pipelet: Pipelet<unit,Socket>, backlog, perOperationBufferSi
     // and the data is held until the first receive operation.
     let perOperationBufferSize = (max 288 >> min 1024) perOperationBufferSize
     let generateSocket() = new Socket(addressFamily, socketType, protocolType)
-    let socketPool = new ObjectPool<_>(backlog, generateSocket, cleanUp = disposeSocket)
+    let socketPool = new ObjectPool<_>(backlog, generateSocket, cleanUp = closeConnection)
     let bocketPool = new BocketPool("connection pool", max (backlog * 2) 2, perOperationBufferSize)
 
     // NOTE: No longer need to track clients, as the SocketListener
