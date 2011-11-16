@@ -1,4 +1,5 @@
-﻿module Fracture.Threading
+﻿[<AutoOpen>]
+module Fracture.Prelude
 
 open System.Threading
 
