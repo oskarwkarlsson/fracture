@@ -6,8 +6,6 @@ open System.Net
 open System.Net.Sockets
 open SocketExtensions
 
-type SocketDescriptor = {Socket: Socket; RemoteEndPoint: IPEndPoint}
-
 /// Creates a Socket and binds it to specified IPEndpoint, if you want a sytem assigned one Use IPEndPoint(IPAddress.Any, 0)
 let inline createSocket (ipEndPoint) =
     let socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)
@@ -33,22 +31,22 @@ let inline send client completed (getArgs: unit -> SocketAsyncEventArgs) bufferL
         if offset < msg.Length then
             let args = getArgs()
             let amountToSend = min (msg.Length - offset) bufferLength
-            args.UserToken <- client
+            args.AcceptSocket <- client
             Buffer.BlockCopy(msg, offset, args.Buffer, args.Offset, amountToSend)
             args.SetBuffer(args.Offset, amountToSend)
-            if client.Socket.Connected then 
-                client.Socket.SendAsyncSafe(completed, args)
+            if client.Connected then 
+                client.SendAsyncSafe(completed, args)
                 loop (offset + amountToSend)
             else Console.WriteLine(sprintf "Connection lost to%A" client.RemoteEndPoint)
     loop 0  
     if not keepAlive then 
         let args = getArgs()
         args.UserToken <- client
-        client.Socket.Shutdown(SocketShutdown.Both)
-        client.Socket.DisconnectAsyncSafe(completed, args)
+        client.Shutdown(SocketShutdown.Both)
+        client.DisconnectAsyncSafe(completed, args)
     
 let inline acquireData(args: SocketAsyncEventArgs)= 
     //process received data
-    let data:byte[] = Array.zeroCreate args.BytesTransferred
+    let data : byte[] = Array.zeroCreate args.BytesTransferred
     Buffer.BlockCopy(args.Buffer, args.Offset, data, 0, data.Length)
     data

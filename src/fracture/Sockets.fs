@@ -8,7 +8,7 @@ open Common
 open SocketExtensions
 open Pipelets
 
-type SocketListener(pipelet: Pipelet<unit,SocketDescriptor>, backlog, perOperationBufferSize, addressFamily, socketType, protocolType) =
+type SocketListener(pipelet: Pipelet<unit,Socket>, backlog, perOperationBufferSize, addressFamily, socketType, protocolType) =
     // Note: The per operation buffer size must be between 288 and 1024 bytes.
     // Any less results in lost data, according to our testing. Any more,
     // and the data is held until the first receive operation.
@@ -34,10 +34,10 @@ type SocketListener(pipelet: Pipelet<unit,SocketDescriptor>, backlog, perOperati
 // TODO: Shared bocket pool? If so, who owns it? Does sharing a single pool
 // give any advantage?
 
-type SocketReceiver<'a>(pipelet: Pipelet<SocketDescriptor,'a>, poolSize, perOperationBufferSize) =
+type SocketReceiver<'a>(pipelet: Pipelet<Socket,'a>, poolSize, perOperationBufferSize) =
     let pool = new BocketPool("receive pool", max poolSize 2, perOperationBufferSize)
 
-type SocketSender<'a>(pipelet: Pipelet<SocketDescriptor,'a>, poolSize, perOperationBufferSize) =
+type SocketSender<'a>(pipelet: Pipelet<Socket,'a>, poolSize, perOperationBufferSize) =
     let pool = new BocketPool("send pool", max poolSize 2, perOperationBufferSize)
     // TODO: SocketSender needs to know whether the connection should
     // be closed or remain open. If it is to remain open, the SocketSender
