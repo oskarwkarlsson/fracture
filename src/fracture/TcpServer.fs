@@ -113,8 +113,7 @@ type TcpServer(poolSize, perOperationBufferSize, acceptBacklogCount, received, ?
         !-- connections
         if disconnected.IsSome then 
             disconnected.Value sd.RemoteEndPoint
-        let reuseSocket = sd.Socket.Connected
-        sd.Socket.DisconnectAsyncSafe(completed, args, reuseSocket)
+        sd.Socket.DisconnectAsyncSafe(completed, args)
 
     and processDisconnect (args) =
         bocketPool.CheckIn(args)
