@@ -14,13 +14,13 @@ let generateCircularSeq s =
 //                  |> generateCircularSeq 
 //                  |> Seq.take quoteSize 
 //                  |> Seq.toArray
-let testMessage = Array.init quoteSize (fun x -> 0uy)
+let testMessage = "GET / HTTP 1.1\r\nHost: 127.0.0.1:6667\r\nConnection: Keep-Alive\r\nAccept: */*\r\n\r\n"B
 
 let startClient(port, i) = async {
     do! Async.Sleep(i*50)
     Console.WriteLine(sprintf "Client %d" i )
     let client = new TcpClient()
-    client.Sent |> Observable.add (fun x -> Console.WriteLine( sprintf  "Sent: %A bytes" (fst x).Length) )
+    client.Sent |> Observable.add (fun x -> Console.WriteLine(sprintf "Sent: %A bytes" (fst x).Length))
 
     client.Received
     |> Observable.add (fun x ->
@@ -37,7 +37,7 @@ let startClient(port, i) = async {
         Async.Start sendloop)
 
     client.Disconnected |> Observable.add (fun x -> Console.WriteLine(sprintf "%A Endpoint %A: Disconnected" DateTime.Now.TimeOfDay x))
-    client.Start(new IPEndPoint(IPAddress.Loopback, port)) }
+    client.Connect(new IPEndPoint(IPAddress.Loopback, port)) }
 
 Async.Parallel [ for i in 1 .. 1000 -> startClient (6667, i) ] 
     |> Async.Ignore 
