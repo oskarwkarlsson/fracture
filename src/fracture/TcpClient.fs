@@ -1,17 +1,17 @@
 ﻿namespace Fracture
 
 open System
-open System.Net
-open System.Net.Sockets
 open System.Collections.Generic
 open System.Collections.Concurrent
-open SocketExtensions
+open System.Net
+open System.Net.Sockets
 open System.Reflection
-open Common
+open Sockets
+open SocketExtensions
 
 ///Creates a new TcpClient using the specified parameters
 type TcpClient(ipEndPoint, poolSize, size) =
-    let listeningSocket = createTcpSocket()
+    let listeningSocket = Tcp.createTcpSocket()
     do listeningSocket.Bind(ipEndPoint)
     let pool = new BocketPool("regular pool", poolSize, size)
     let disposed = ref false
@@ -20,7 +20,8 @@ type TcpClient(ipEndPoint, poolSize, size) =
     let cleanUp disposing = 
         if not !disposed then
             if disposing then
-                closeConnection listeningSocket
+                if listeningSocket <> null then
+                    closeConnection listeningSocket
                 pool.Dispose()
             disposed := true
 
@@ -28,50 +29,9 @@ type TcpClient(ipEndPoint, poolSize, size) =
     let disconnectedEvent = new Event<_>()
     let sentEvent = new Event<_>()
     let receivedEvent = new Event<_>()
+
+    let completed args = Tcp.completed pool receivedEvent.Trigger sentEvent.Trigger disconnectedEvent.Trigger args
         
-    ///This function is called on each async operation.
-    let rec completed (args: SocketAsyncEventArgs) =
-        try
-            match args.LastOperation with
-            | SocketAsyncOperation.Receive -> processReceive args
-            | SocketAsyncOperation.Send -> processSend args
-            | SocketAsyncOperation.Disconnect -> processDisconnect args
-            | _ -> args.LastOperation |> failwith "Unknown operation: %a"            
-        finally
-            args.UserToken <- null
-            pool.CheckIn(args)
-
-    and processReceive args =
-        if args.SocketError = SocketError.Success && args.BytesTransferred > 0 then
-            //process received data, check if data was given on connection.
-            let data = acquireData args
-            //trigger received
-            (data, listeningSocket.RemoteEndPoint) |> receivedEvent.Trigger
-            //get on with the next receive
-            let nextArgs = pool.CheckOut()
-            listeningSocket.ReceiveAsyncSafe (completed,  nextArgs)
-        else
-            //Something went wrong or the server stopped sending bytes.
-            listeningSocket.RemoteEndPoint |> disconnectedEvent.Trigger 
-            closeConnection listeningSocket
-
-    and processSend args =
-        let sock = args.UserToken :?> Socket
-        match args.SocketError with
-        | SocketError.Success ->
-            let sentData = acquireData args
-            //notify data sent
-            (sentData, listeningSocket.RemoteEndPoint) |> sentEvent.Trigger
-        | SocketError.NoBufferSpaceAvailable
-        | SocketError.IOPending
-        | SocketError.WouldBlock ->
-            failwith "Buffer overflow or send buffer timeout" //graceful termination?  
-        | _ -> args.SocketError.ToString() |> printfn "socket error on send: %s"
-
-    and processDisconnect args =
-        // NOTE: With a socket pool, the number of active connections could be calculated by the difference of the sockets in the pool from the allowed connections.
-        listeningSocket.RemoteEndPoint :?> IPEndPoint |> disconnectedEvent.Trigger
-
     let processConnect (args: SocketAsyncEventArgs) =
         if args.SocketError = SocketError.Success then
             // trigger connected

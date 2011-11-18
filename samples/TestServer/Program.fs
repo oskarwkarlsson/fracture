@@ -1,7 +1,7 @@
 ﻿open System
 open System.Net
 open Fracture
-open Fracture.Common
+open Fracture.Sockets
 open HttpMachine
 open System.Collections.Generic
 open System.Diagnostics
@@ -15,9 +15,9 @@ let shortdate = DateTime.UtcNow.ToShortDateString
 open Fracture.HttpServer
 
 let response = "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nConnection: Keep-Alive\r\nContent-Length: 12\r\nServer: Fracture\r\n\r\nHello world.\r\n\r\n"
-let server = new HttpServer(headers = (fun (headers, keepAlive, svr, sd) -> svr.Send(sd.RemoteEndPoint, response, not keepAlive)), 
-                            body = (fun (body, svr, sd) -> ()), 
-                            requestEnd = fun (req, svr, sd) -> ())
+let server = new HttpServer(headers = (fun (_, keepAlive, svr, s) -> svr.Send(s, response, not keepAlive)), 
+                            body = (fun _ -> ()), 
+                            requestEnd = fun _ -> ())
 
 server.Start(6667)
 printfn "Http Server started"

@@ -4,7 +4,7 @@ open System
 open System.Text
 open System.Net
 open Fracture
-open Fracture.Common
+open Fracture.Sockets
 open HttpMachine
 open System.Collections.Generic
 open System.Diagnostics
@@ -13,11 +13,11 @@ open System.Collections.Concurrent
 type HttpServer(headers, body, requestEnd) as this = 
     let disposed = ref false
 
-    let svr = TcpServer.Create((fun (data,svr,sd) -> 
+    let svr = TcpServer.Create((fun (data,sd) -> 
         let parser =
             let parserDelegate = ParserDelegate(requestBegan = (fun (a,b) -> headers(a,b,this,sd)), 
-                                                requestBody = (fun data -> (body(data, svr,sd))), 
-                                                requestEnded = (fun req -> (requestEnd(req, svr, sd))))
+                                                requestBody = (fun data -> (body(data, sd))), 
+                                                requestEnded = (fun req -> (requestEnd(req, sd))))
             HttpParser(parserDelegate)
         parser.Execute(new ArraySegment<_>(data)) |> ignore))
 

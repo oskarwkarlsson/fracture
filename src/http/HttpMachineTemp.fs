@@ -3,7 +3,7 @@
 open System
 open System.Net
 open Fracture
-open Fracture.Common
+open Fracture.Sockets
 open HttpMachine
 open System.Collections.Generic
 open System.Diagnostics

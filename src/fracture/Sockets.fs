@@ -4,10 +4,41 @@ open System
 open System.Net
 open System.Net.Sockets
 open FSharpx
-open Common
 open SocketExtensions
 open Pipelets
 
+let inline acquireData(args: SocketAsyncEventArgs)= 
+    //process received data
+    let data = Array.zeroCreate<byte> args.BytesTransferred
+    Buffer.BlockCopy(args.Buffer, args.Offset, data, 0, data.Length)
+    data
+
+let inline closeConnection (socket:Socket) =
+    try
+        if socket <> null then
+            socket.Shutdown(SocketShutdown.Both)
+    finally socket.Close()
+
+/// Sends data to the socket cached in the SAEA given, using the SAEA's buffer
+let inline send client completed (getArgs: unit -> SocketAsyncEventArgs) bufferLength (msg: byte[]) close = 
+    let rec loop offset =
+        if offset < msg.Length then
+            let args = getArgs()
+            let amountToSend = min (msg.Length - offset) bufferLength
+            args.AcceptSocket <- client
+            Buffer.BlockCopy(msg, offset, args.Buffer, args.Offset, amountToSend)
+            args.SetBuffer(args.Offset, amountToSend)
+            if client.Connected then 
+                client.SendAsyncSafe(completed, args)
+                loop (offset + amountToSend)
+            else Console.WriteLine(sprintf "Connection lost to%A" client.RemoteEndPoint)
+    loop 0
+    if close then
+        let args = getArgs()
+        args.AcceptSocket <- client
+        client.Shutdown(SocketShutdown.Both)
+        client.DisconnectAsyncSafe(completed, args)
+    
 type SocketListener(pipelet: Pipelet<unit,Socket>, backlog, perOperationBufferSize, addressFamily, socketType, protocolType) =
     // Note: The per operation buffer size must be between 288 and 1024 bytes.
     // Any less results in lost data, according to our testing. Any more,

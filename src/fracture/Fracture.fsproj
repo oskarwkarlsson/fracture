@@ -38,11 +38,11 @@
     <None Include="packages.config" />
     <Compile Include="Prelude.fs" />
     <Compile Include="SocketExtensions.fs" />
-    <Compile Include="Common.fs" />
     <Compile Include="ObjectPool.fs" />
     <Compile Include="BocketPool.fs" />
     <Compile Include="Pipelets.fs" />
     <Compile Include="Sockets.fs" />
+    <Compile Include="Tcp.fs" />
     <Compile Include="TcpClient.fs" />
     <Compile Include="TcpServer.fs" />
     <Compile Include="RemoteAgent.fs" />
