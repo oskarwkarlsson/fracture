@@ -24,24 +24,27 @@ let internal completed (pool: BocketPool) received sent disconnected sender args
             | _ -> failwith "Unknown operation: %a" args.LastOperation
         finally
             args.AcceptSocket <- null
+            args.UserToken <- null
             pool.CheckIn(args)
     
     and processReceive (args) =
         if args.SocketError = SocketError.Success && args.BytesTransferred > 0 then
-            //process received data, check if data was given on connection.
+            // process received data, check if data was given on connection.
             let data = acquireData args
-            //trigger received
-            received (data, sender, args.AcceptSocket)
-            //get on with the next receive
+            // trigger received
+            received (data, sender, args.AcceptSocket, args.UserToken :?> EndPoint)
+            // get on with the next receive
             if args.AcceptSocket.Connected then 
                 let next = pool.CheckOut()
                 next.AcceptSocket <- args.AcceptSocket
+                next.UserToken <- args.UserToken
                 args.AcceptSocket.ReceiveAsyncSafe(completed, next)
         //0 byte receive - disconnect.
         else
             // TODO: Investigate this because it this looks odd. We want to disconnect when no bytes are received?
             let closeArgs = pool.CheckOut()
             closeArgs.AcceptSocket <- args.AcceptSocket
+            closeArgs.UserToken <- args.UserToken
             args.AcceptSocket.Shutdown(SocketShutdown.Both)
             args.AcceptSocket.DisconnectAsyncSafe(completed, closeArgs)
     
@@ -49,8 +52,8 @@ let internal completed (pool: BocketPool) received sent disconnected sender args
         match args.SocketError with
         | SocketError.Success ->
             let sentData = acquireData args
-            //notify data sent
-            sent (sentData, args.AcceptSocket.RemoteEndPoint)
+            // notify data sent
+            sent (sentData, args.UserToken :?> EndPoint)
         | SocketError.NoBufferSpaceAvailable
         | SocketError.IOPending
         | SocketError.WouldBlock ->
@@ -59,10 +62,11 @@ let internal completed (pool: BocketPool) received sent disconnected sender args
     
     and processDisconnect (args) =
         // NOTE: With a socket pool, the number of active connections could be calculated by the difference of the sockets in the pool from the allowed connections.
-        disconnected args.AcceptSocket.RemoteEndPoint
+        disconnected (args.UserToken :?> EndPoint)
         // TODO: return the socket to the socket pool for reuse.
         // All calls to DisconnectAsync should have shutdown the socket.
         // Calling connectionClose here would just duplicate that effort.
-        args.AcceptSocket.Close()
+        if args.AcceptSocket <> null then
+            args.AcceptSocket.Close()
 
     completed args

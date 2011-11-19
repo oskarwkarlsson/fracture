@@ -1,8 +1,8 @@
 ﻿namespace Fracture
 
 open System
-open System.Collections.Generic
 open System.Collections.Concurrent
+open System.Collections.Generic
 open System.Net
 open System.Net.Sockets
 open System.Reflection
@@ -42,7 +42,7 @@ type TcpClient(ipEndPoint, poolSize, size) as client =
             //if args.BytesTransferred > 0 then
             //    let data = acquireData args
             //    //trigger received
-            //    (data, listeningSocket.RemoteEndPoint :?> IPEndPoint) |> receivedEvent.Trigger
+            //    (data, listeningSocket.RemoteEndPoint) |> receivedEvent.Trigger
                 
             // start receive on connection
             let nextArgs = pool.CheckOut()

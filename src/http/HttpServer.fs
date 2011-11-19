@@ -14,11 +14,11 @@ open HttpMachine
 type HttpServer(headers, body, requestEnd) as this = 
     let disposed = ref false
 
-    let svr = TcpServer.Create((fun (data, svr, sd) -> 
+    let svr = TcpServer.Create((fun (data, svr, conn, endPoint) -> 
         let parser =
-            let parserDelegate = ParserDelegate(requestBegan = (fun (a,b) -> headers(a,b,this,sd)), 
-                                                requestBody = (fun data -> (body(data, svr, sd))), 
-                                                requestEnded = (fun req -> (requestEnd(req, svr, sd))))
+            let parserDelegate = ParserDelegate(requestBegan = (fun (a,b) -> headers(a, b, this, conn, endPoint)), 
+                                                requestBody = (fun data -> (body(data, svr, conn, endPoint))), 
+                                                requestEnded = (fun req -> (requestEnd(req, svr, conn, endPoint))))
             HttpParser(parserDelegate)
         parser.Execute(new ArraySegment<_>(data)) |> ignore))
 
@@ -33,7 +33,7 @@ type HttpServer(headers, body, requestEnd) as this =
 
     member h.Send(client: Socket, response: string, close) = 
         let encoded = Encoding.ASCII.GetBytes(response)
-        svr.Send(client.RemoteEndPoint, encoded, close)
+        svr.Send(client, encoded, close)
 
     interface IDisposable with
         member h.Dispose() =

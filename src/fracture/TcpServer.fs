@@ -39,6 +39,7 @@ type TcpServer(poolSize, perOperationBufferSize, acceptBacklogCount, received, ?
         match args.SocketError with
         | SocketError.Success ->
             let acceptSocket = args.AcceptSocket
+            let endPoint = acceptSocket.RemoteEndPoint
             try
                 // start next accept
                 let saea = connectionPool.CheckOut()
@@ -54,13 +55,14 @@ type TcpServer(poolSize, perOperationBufferSize, acceptBacklogCount, received, ?
                 // start receive on accepted client
                 let receiveSaea = bocketPool.CheckOut()
                 receiveSaea.AcceptSocket <- acceptSocket
+                receiveSaea.UserToken <- endPoint
                 acceptSocket.ReceiveAsyncSafe(completed, receiveSaea)
     
-                //check if data was given on connection
+                // check if data was given on connection
                 if args.BytesTransferred > 0 then
                     let data = acquireData args
-                    //trigger received
-                    in received (data, s, acceptSocket)
+                    // trigger received
+                    in received (data, s, acceptSocket, endPoint)
             finally
                 // remove the AcceptSocket because we're reusing args
                 args.AcceptSocket <- null
@@ -91,13 +93,17 @@ type TcpServer(poolSize, perOperationBufferSize, acceptBacklogCount, received, ?
         for i in 1 .. acceptBacklogCount do
             listeningSocket.AcceptAsyncSafe(processAccept, connectionPool.CheckOut())
 
-    /// Sends the specified message to the client.
+    /// Sends the specified message to the client end point if the client is registered.
     member s.Send(clientEndPoint, msg, close) =
         let success, client = clients.TryGetValue(clientEndPoint)
         if success then
             send client completed bocketPool.CheckOut perOperationBufferSize msg close
         else failwith "Could not find client %"
         
+    /// Sends the specified message to the client.
+    member s.Send(client: Socket, msg, close) =
+        send client completed bocketPool.CheckOut perOperationBufferSize msg close
+
     member s.Dispose() = (s :> IDisposable).Dispose()
 
     override s.Finalize() = cleanUp false

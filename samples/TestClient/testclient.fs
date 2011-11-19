@@ -23,7 +23,7 @@ let startClient(port, i) = async {
     client.Sent |> Observable.add (fun x -> Console.WriteLine(sprintf "Sent: %A bytes" (fst x).Length))
 
     client.Received
-    |> Observable.add (fun (data, _, socket) ->
+    |> Observable.add (fun (data, _, socket, _) ->
         let res = sprintf "%A %A received: %i bytes" DateTime.Now.TimeOfDay socket.RemoteEndPoint data.Length 
         Console.WriteLine(res))
 

@@ -15,7 +15,7 @@ let shortdate = DateTime.UtcNow.ToShortDateString
 open Fracture.HttpServer
 
 let response = "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nConnection: Keep-Alive\r\nContent-Length: 12\r\nServer: Fracture\r\n\r\nHello world.\r\n\r\n"
-let server = new HttpServer(headers = (fun (headers, keepAlive, svr, s) -> svr.Send(s, response, not keepAlive)), 
+let server = new HttpServer(headers = (fun (headers, keepAlive, svr, connection, endPoint) -> svr.Send(connection, response, not keepAlive)), 
                             body = (fun _ -> ()), 
                             requestEnd = fun _ -> ())
 
