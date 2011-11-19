@@ -1,10 +1,11 @@
 ﻿open System
+open System.Collections.Generic
+open System.Diagnostics
 open System.Net
+open System.Text
 open Fracture
 open Fracture.Sockets
 open HttpMachine
-open System.Collections.Generic
-open System.Diagnostics
 
 let debug (x:UnhandledExceptionEventArgs) =
     Console.WriteLine(sprintf "%A" (x.ExceptionObject :?> Exception))
@@ -14,21 +15,40 @@ System.AppDomain.CurrentDomain.UnhandledException |> Observable.add debug
 let shortdate = DateTime.UtcNow.ToShortDateString
 open Fracture.HttpServer
 
+let status (major, minor) (statusCode: HttpStatusCode) (sb: StringBuilder) =
+    sb.AppendFormat("HTTP/{0}.{1} {2} {3}", major, minor, Convert.ToInt16(statusCode), statusCode).AppendLine()
+
+let header (key, value) (sb: StringBuilder) = sb.AppendLine(key + ": " + value.ToString())
+
+let connectionHeader minor keepAlive (sb: StringBuilder) =
+    if keepAlive then
+        if minor = 0 then
+            sb |> header ("Connection", "Keep-Alive")
+        else sb
+    else
+        if minor = 1 then
+            sb |> header ("Connection", "Close")
+        else sb
+
+let complete (content: byte[]) (sb: StringBuilder) =
+    let sb = sb.AppendLine()
+    if content <> null && content.Length > 0 then
+        sb.Append(content).ToString()
+    else sb.ToString()
+
 let onHeaders(headers: HttpRequestHeaders, keepAlive, server: HttpServer, connection, endPoint) =
-    let connectionHeader =
-        if keepAlive then
-            if headers.Version.Minor = 0 then
-                "Connection: Keep-Alive\r\n"
-            else ""
-        else
-            if headers.Version.Minor = 1 then
-                "Connection: Close\r\n"
-            else ""
-    let response = sprintf "HTTP/%d.%d 200 OK\r\nContent-Type: text/plain\r\n%sContent-Length: 12\r\nServer: Fracture\r\n\r\nHello world."
-                           headers.Version.Major
-                           headers.Version.Minor
-                           connectionHeader
+
+    let response =
+        StringBuilder()
+        |> status (headers.Version.Major, headers.Version.Minor) HttpStatusCode.OK
+        |> header ("Server", "Fracture")
+        |> connectionHeader headers.Version.Minor keepAlive
+        |> header ("Content-Type", "text/plain")
+        |> header ("Content-Length", 12)
+        |> complete "Hello world."B
+
     server.Send(connection, response, not keepAlive)
+
 let server = new HttpServer(headers = onHeaders, body = ignore, requestEnd = ignore)
 
 server.Start(6667)
