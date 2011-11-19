@@ -31,7 +31,7 @@ let connectionHeader minor keepAlive (sb: StringBuilder) =
         else sb
 
 let complete (content: byte[]) (sb: StringBuilder) =
-    let sb = sb.AppendLine()
+    sb.AppendLine() |> ignore
     if content <> null && content.Length > 0 then
         sb.Append(content).ToString()
     else sb.ToString()
