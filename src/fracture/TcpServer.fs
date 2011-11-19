@@ -33,7 +33,7 @@ type TcpServer(poolSize, perOperationBufferSize, acceptBacklogCount, received, ?
                 bocketPool.Dispose()
             disposed := true
 
-    let completed args = Tcp.completed bocketPool received sent (!-- connections; disconnected) s args
+    let completed = Tcp.completed(bocketPool, received, sent, (!-- connections; disconnected), s)
     
     let rec processAccept (args: SocketAsyncEventArgs) =
         match args.SocketError with

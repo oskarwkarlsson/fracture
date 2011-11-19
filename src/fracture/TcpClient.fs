@@ -30,7 +30,7 @@ type TcpClient(ipEndPoint, poolSize, size) as client =
     let sentEvent = new Event<_>()
     let receivedEvent = new Event<_>()
 
-    let completed args = Tcp.completed pool receivedEvent.Trigger sentEvent.Trigger disconnectedEvent.Trigger client args
+    let completed = Tcp.completed(pool, receivedEvent.Trigger, sentEvent.Trigger, disconnectedEvent.Trigger, client)
         
     let processConnect (args: SocketAsyncEventArgs) =
         if args.SocketError = SocketError.Success then
