@@ -10,7 +10,7 @@ open Sockets
 open SocketExtensions
 
 ///Creates a new TcpClient using the specified parameters
-type TcpClient(ipEndPoint, poolSize, size) =
+type TcpClient(ipEndPoint, poolSize, size) as client =
     let listeningSocket = Tcp.createTcpSocket()
     do listeningSocket.Bind(ipEndPoint)
     let pool = new BocketPool("regular pool", poolSize, size)
@@ -30,7 +30,7 @@ type TcpClient(ipEndPoint, poolSize, size) =
     let sentEvent = new Event<_>()
     let receivedEvent = new Event<_>()
 
-    let completed args = Tcp.completed pool receivedEvent.Trigger sentEvent.Trigger disconnectedEvent.Trigger args
+    let completed args = Tcp.completed pool receivedEvent.Trigger sentEvent.Trigger disconnectedEvent.Trigger client args
         
     let processConnect (args: SocketAsyncEventArgs) =
         if args.SocketError = SocketError.Success then

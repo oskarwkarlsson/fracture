@@ -10,7 +10,7 @@ open Sockets
 open SocketExtensions
 
 /// Creates a new TcpServer using the specified parameters
-type TcpServer(poolSize, perOperationBufferSize, acceptBacklogCount, received, ?connected, ?disconnected, ?sent) =
+type TcpServer(poolSize, perOperationBufferSize, acceptBacklogCount, received, ?connected, ?disconnected, ?sent) as s =
     let sent = defaultArg sent ignore
     let connected = defaultArg connected ignore
     let disconnected = defaultArg disconnected ignore
@@ -18,6 +18,7 @@ type TcpServer(poolSize, perOperationBufferSize, acceptBacklogCount, received, ?
     // Note: 288 bytes is the minimum size for a connection.
     let connectionPool = new BocketPool("connection pool", max (acceptBacklogCount * 2) 2, 288)
     let bocketPool = new BocketPool("regular pool", max poolSize 2, perOperationBufferSize)
+    let clients = new ConcurrentDictionary<_,_>()
     let connections = ref 0
     let listeningSocket = Tcp.createTcpSocket()
     let disposed = ref false
@@ -32,22 +33,25 @@ type TcpServer(poolSize, perOperationBufferSize, acceptBacklogCount, received, ?
                 bocketPool.Dispose()
             disposed := true
 
-    let completed args = Tcp.completed bocketPool received sent (!-- connections; disconnected) args
+    let completed args = Tcp.completed bocketPool received sent (!-- connections; disconnected) s args
     
     let rec processAccept (args: SocketAsyncEventArgs) =
         match args.SocketError with
         | SocketError.Success ->
             let acceptSocket = args.AcceptSocket
             try
-                //start next accept
+                // start next accept
                 let saea = connectionPool.CheckOut()
                 listeningSocket.AcceptAsyncSafe(processAccept, saea)
+
+                // process newly connected client
+                clients.AddOrUpdate(acceptSocket.RemoteEndPoint, acceptSocket, fun _ _ -> acceptSocket) |> ignore
     
-                //trigger connected
+                // trigger connected
                 connected acceptSocket.RemoteEndPoint
                 !++ connections
     
-                //start receive on accepted client
+                // start receive on accepted client
                 let receiveSaea = bocketPool.CheckOut()
                 receiveSaea.AcceptSocket <- acceptSocket
                 acceptSocket.ReceiveAsyncSafe(completed, receiveSaea)
@@ -56,7 +60,7 @@ type TcpServer(poolSize, perOperationBufferSize, acceptBacklogCount, received, ?
                 if args.BytesTransferred > 0 then
                     let data = acquireData args
                     //trigger received
-                    in received (data, acceptSocket)
+                    in received (data, s, acceptSocket)
             finally
                 // remove the AcceptSocket because we're reusing args
                 args.AcceptSocket <- null
@@ -88,8 +92,11 @@ type TcpServer(poolSize, perOperationBufferSize, acceptBacklogCount, received, ?
             listeningSocket.AcceptAsyncSafe(processAccept, connectionPool.CheckOut())
 
     /// Sends the specified message to the client.
-    member s.Send(client, msg, close) =
-        send client completed bocketPool.CheckOut perOperationBufferSize msg close
+    member s.Send(clientEndPoint, msg, close) =
+        let success, client = clients.TryGetValue(clientEndPoint)
+        if success then
+            send client completed bocketPool.CheckOut perOperationBufferSize msg close
+        else failwith "Could not find client %"
         
     member s.Dispose() = (s :> IDisposable).Dispose()
 

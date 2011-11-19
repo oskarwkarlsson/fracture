@@ -11,7 +11,7 @@ open SocketExtensions
 let inline createTcpSocket() = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)
 
 /// This function is called on each send, receive, and disconnect
-let internal completed (pool: BocketPool) received sent disconnected args =
+let internal completed (pool: BocketPool) received sent disconnected sender args =
     let rec completed (args:SocketAsyncEventArgs) =
         try
             match args.LastOperation with
@@ -31,7 +31,7 @@ let internal completed (pool: BocketPool) received sent disconnected args =
             //process received data, check if data was given on connection.
             let data = acquireData args
             //trigger received
-            received (data, args.AcceptSocket)
+            received (data, sender, args.AcceptSocket)
             //get on with the next receive
             if args.AcceptSocket.Connected then 
                 let next = pool.CheckOut()
