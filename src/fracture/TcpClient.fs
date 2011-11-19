@@ -20,8 +20,7 @@ type TcpClient(ipEndPoint, poolSize, size) as client =
     let cleanUp disposing = 
         if not !disposed then
             if disposing then
-                if listeningSocket <> null then
-                    closeConnection listeningSocket
+                disconnect false listeningSocket
                 pool.Dispose()
             disposed := true
 
@@ -30,7 +29,11 @@ type TcpClient(ipEndPoint, poolSize, size) as client =
     let sentEvent = new Event<_>()
     let receivedEvent = new Event<_>()
 
-    let completed = Tcp.completed(pool, receivedEvent.Trigger, sentEvent.Trigger, disconnectedEvent.Trigger, client)
+    let checkInSocket =
+        // TODO: switch to reusing sockets using a pool.
+        disconnect false
+
+    let completed = Tcp.completed(pool.CheckOut, pool.CheckIn, checkInSocket, receivedEvent.Trigger, sentEvent.Trigger, disconnectedEvent.Trigger, client)
         
     let processConnect (args: SocketAsyncEventArgs) =
         if args.SocketError = SocketError.Success then

@@ -13,11 +13,15 @@ let inline acquireData(args: SocketAsyncEventArgs)=
     Buffer.BlockCopy(args.Buffer, args.Offset, data, 0, data.Length)
     data
 
-let inline closeConnection (socket:Socket) =
-    try
-        if socket <> null then
-            socket.Shutdown(SocketShutdown.Both)
-    finally socket.Close()
+let inline disconnect reuseSocket (socket: Socket) =
+    if socket <> null then
+        try
+            if socket.Connected then
+                socket.Shutdown(SocketShutdown.Both)
+                socket.Disconnect(reuseSocket)
+        finally
+            if not reuseSocket then
+                socket.Close()
 
 /// Sends data to the socket cached in the SAEA given, using the SAEA's buffer
 let inline send client completed (getArgs: unit -> SocketAsyncEventArgs) bufferLength (msg: byte[]) close = 
@@ -45,7 +49,7 @@ type SocketListener(pipelet: Pipelet<unit,Socket>, backlog, perOperationBufferSi
     // and the data is held until the first receive operation.
     let perOperationBufferSize = (max 288 >> min 1024) perOperationBufferSize
     let generateSocket() = new Socket(addressFamily, socketType, protocolType)
-    let socketPool = new ObjectPool<_>(backlog, generateSocket, cleanUp = closeConnection)
+    let socketPool = new ObjectPool<_>(backlog, generateSocket, cleanUp = disconnect false)
     let bocketPool = new BocketPool("connection pool", max (backlog * 2) 2, perOperationBufferSize)
 
     // NOTE: No longer need to track clients, as the SocketListener

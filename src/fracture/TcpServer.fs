@@ -27,13 +27,16 @@ type TcpServer(poolSize, perOperationBufferSize, acceptBacklogCount, received, ?
     let cleanUp disposing = 
         if not !disposed then
             if disposing then
-                if listeningSocket <> null then
-                    closeConnection listeningSocket
+                disconnect false listeningSocket
                 connectionPool.Dispose()
                 bocketPool.Dispose()
             disposed := true
 
-    let completed = Tcp.completed(bocketPool, received, sent, (!-- connections; disconnected), s)
+    let checkInSocket =
+        // TODO: switch to reusing sockets using a pool.
+        disconnect false
+
+    let completed = Tcp.completed(bocketPool.CheckOut, bocketPool.CheckIn, checkInSocket, received, sent, (!-- connections; disconnected), s)
     
     let rec processAccept (args: SocketAsyncEventArgs) =
         match args.SocketError with
