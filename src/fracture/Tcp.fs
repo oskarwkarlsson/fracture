@@ -39,14 +39,15 @@ let internal completed (pool: BocketPool) received sent disconnected sender args
                 next.AcceptSocket <- args.AcceptSocket
                 next.UserToken <- args.UserToken
                 args.AcceptSocket.ReceiveAsyncSafe(completed, next)
-        //0 byte receive - disconnect.
         else
-            // TODO: Investigate this because it this looks odd. We want to disconnect when no bytes are received?
-            let closeArgs = pool.CheckOut()
-            closeArgs.AcceptSocket <- args.AcceptSocket
-            closeArgs.UserToken <- args.UserToken
-            args.AcceptSocket.Shutdown(SocketShutdown.Both)
-            args.AcceptSocket.DisconnectAsyncSafe(completed, closeArgs)
+            // 0 bytes received means the client is disconnecting.
+            disconnected (args.UserToken :?> EndPoint)
+            // TODO: Re-use the socket once a socket pool is available.
+//            let closeArgs = pool.CheckOut()
+//            closeArgs.AcceptSocket <- args.AcceptSocket
+//            closeArgs.UserToken <- args.UserToken
+//            args.AcceptSocket.Shutdown(SocketShutdown.Both)
+//            args.AcceptSocket.DisconnectAsyncSafe(completed, closeArgs)
     
     and processSend (args) =
         match args.SocketError with
