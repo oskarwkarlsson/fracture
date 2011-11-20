@@ -11,13 +11,7 @@ type internal BocketPool(name, maxPoolCount, perBocketBufferSize) =
     let totalsize = (maxPoolCount * perBocketBufferSize)
     let buffer = Array.zeroCreate<byte> totalsize
     let pool = new BlockingCollection<SocketAsyncEventArgs>(maxPoolCount:int)
-    let subscriptions = new ConcurrentDictionary<int, IDisposable>()
     let disposed = ref false
-
-    let dispose (args: SocketAsyncEventArgs) =
-        let subscription = subscriptions.[args.GetHashCode()]
-        subscription.Dispose()
-        args.Dispose()
 
     let cleanUp disposing = 
         if not !disposed then
@@ -25,7 +19,7 @@ type internal BocketPool(name, maxPoolCount, perBocketBufferSize) =
                 pool.CompleteAdding()
                 while pool.Count > 1 do
                     let args = pool.Take()
-                    dispose args
+                    args.Dispose()
                 pool.Dispose()
             disposed := true
 
@@ -47,8 +41,6 @@ type internal BocketPool(name, maxPoolCount, perBocketBufferSize) =
     member this.Start(callback) =
         for n in 0 .. maxPoolCount - 1 do
             let args = new SocketAsyncEventArgs()
-            let subscription = args.Completed |> Observable.subscribe callback
-            subscriptions.[args.GetHashCode()] <- subscription
             args.SetBuffer(buffer, n*perBocketBufferSize, perBocketBufferSize)
             this.CheckIn(args)
 
@@ -68,9 +60,9 @@ type internal BocketPool(name, maxPoolCount, perBocketBufferSize) =
             if args.Count < perBocketBufferSize then 
                 args.SetBuffer(args.Offset, perBocketBufferSize)
             // we might be trying to update the the pool when it's already been disposed. 
-            checkedOperation (fun () -> pool.Add(args)) (fun () -> dispose args)
+            checkedOperation (fun () -> pool.Add(args)) args.Dispose
         // the pool is kicked, dispose of it ourselves.
-        else dispose args
+        else args.Dispose()
             
     member this.Count = pool.Count
 

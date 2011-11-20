@@ -46,7 +46,7 @@ type TcpServer(poolSize, perOperationBufferSize, acceptBacklogCount, received, ?
             try
                 // start next accept
                 let saea = connectionPool.CheckOut()
-                listeningSocket.AcceptAsyncSafe(processAccept, saea)
+                listeningSocket.AcceptObservable(saea).Subscribe(processAccept) |> ignore
 
                 // process newly connected client
                 clients.AddOrUpdate(acceptSocket.RemoteEndPoint, acceptSocket, fun _ _ -> acceptSocket) |> ignore
@@ -59,7 +59,7 @@ type TcpServer(poolSize, perOperationBufferSize, acceptBacklogCount, received, ?
                 let receiveSaea = bocketPool.CheckOut()
                 receiveSaea.AcceptSocket <- acceptSocket
                 receiveSaea.UserToken <- endPoint
-                acceptSocket.ReceiveAsyncSafe(completed, receiveSaea)
+                acceptSocket.ReceiveObservable(receiveSaea).Subscribe(completed) |> ignore
     
                 // check if data was given on connection
                 if args.BytesTransferred > 0 then
@@ -94,7 +94,7 @@ type TcpServer(poolSize, perOperationBufferSize, acceptBacklogCount, received, ?
         listeningSocket.Listen(acceptBacklogCount)
 
         for i in 1 .. acceptBacklogCount do
-            listeningSocket.AcceptAsyncSafe(processAccept, connectionPool.CheckOut())
+            listeningSocket.AcceptObservable(connectionPool.CheckOut()).Subscribe(processAccept) |> ignore
 
     /// Sends the specified message to the client end point if the client is registered.
     member s.Send(clientEndPoint, msg, close) =

@@ -49,7 +49,7 @@ type TcpClient(ipEndPoint, poolSize, size) as client =
                 
             // start receive on connection
             let nextArgs = pool.CheckOut()
-            listeningSocket.ReceiveAsyncSafe(completed, nextArgs)
+            listeningSocket.ReceiveObservable(nextArgs).Subscribe(completed) |> ignore
         else args.SocketError.ToString() |> failwith "socket error on connect: %s"
 
     ///Creates a new TcpClient that uses a system assigned local endpoint that has 50 receive/sent Bockets and 4096 bytes backing storage for each.
@@ -85,7 +85,7 @@ type TcpClient(ipEndPoint, poolSize, size) as client =
         args.RemoteEndPoint <- ipEndPoint
         args.Completed |> Observable.add processConnect
 
-        listeningSocket.ConnectAsyncSafe(processConnect, args)
+        listeningSocket.ConnectObservable(args).Subscribe(processConnect) |> ignore
 
     ///Used to close the current listening socket.
     member this.Dispose() = (this :> IDisposable).Dispose()

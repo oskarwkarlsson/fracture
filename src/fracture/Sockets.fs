@@ -24,7 +24,7 @@ let inline disconnect reuseSocket (socket: Socket) =
                 socket.Close()
 
 /// Sends data to the socket cached in the SAEA given, using the SAEA's buffer
-let inline send client completed (getArgs: unit -> SocketAsyncEventArgs) bufferLength (msg: byte[]) close = 
+let inline send client (completed: SocketAsyncEventArgs -> unit) (getArgs: unit -> SocketAsyncEventArgs) bufferLength (msg: byte[]) close = 
     let rec loop offset =
         if offset < msg.Length then
             let args = getArgs()
@@ -33,7 +33,7 @@ let inline send client completed (getArgs: unit -> SocketAsyncEventArgs) bufferL
             Buffer.BlockCopy(msg, offset, args.Buffer, args.Offset, amountToSend)
             args.SetBuffer(args.Offset, amountToSend)
             if client.Connected then 
-                client.SendAsyncSafe(completed, args)
+                client.SendObservable(args).Subscribe(completed) |> ignore
                 loop (offset + amountToSend)
             else Console.WriteLine(sprintf "Connection lost to%A" client.RemoteEndPoint)
     loop 0
@@ -41,7 +41,7 @@ let inline send client completed (getArgs: unit -> SocketAsyncEventArgs) bufferL
         let args = getArgs()
         args.AcceptSocket <- client
         client.Shutdown(SocketShutdown.Both)
-        client.DisconnectAsyncSafe(completed, args)
+        client.DisconnectObservable(args).Subscribe(completed) |> ignore
     
 type SocketListener(pipelet: Pipelet<unit,Socket>, backlog, perOperationBufferSize, addressFamily, socketType, protocolType) =
     // Note: The per operation buffer size must be between 288 and 1024 bytes.

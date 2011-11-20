@@ -6,16 +6,13 @@ open System.Net
 open System.Net.Sockets
 open FSharpx
 
-/// Helper method to make Async calls easier.  InvokeAsyncMethod ensures the callback always
-/// gets called even if an error occurs or the Async method completes synchronously.
-let inline private invoke(asyncMethod, callback, args: SocketAsyncEventArgs) =
-    if not (asyncMethod args) then callback args
-
 exception SocketIssue of SocketError
     with override this.ToString() = string this.Data0
 
-let inline private invokeAsync asyncMethod (args: SocketAsyncEventArgs) f =
-    Async.FromContinuations <| fun (cont,econt,ccont) ->
+/// Helper method to make Async calls easier.  InvokeAsyncMethod ensures the callback always
+/// gets called even if an error occurs or the Async method completes synchronously.
+let inline private invoke(asyncMethod, f, args: SocketAsyncEventArgs) =
+    fun (cont, econt, ccont) ->
         let k (args: SocketAsyncEventArgs) =
             match args.SocketError with
             | SocketError.Success -> cont <| f args
@@ -34,20 +31,35 @@ let inline private invokeAsync asyncMethod (args: SocketAsyncEventArgs) f =
         if not (asyncMethod args) then
             finish k args
 
+type IDisposable with
+    static member Empty =
+        { new IDisposable with member x.Dispose() = () }
+
+let inline private makeObservable asyncMethod (args: SocketAsyncEventArgs) f =
+    { new IObservable<_> with
+        member x.Subscribe(observer) =
+            let cont = observer.OnNext >> observer.OnCompleted
+            invoke (asyncMethod, f, args) (cont, observer.OnError, observer.OnError)
+            // Disposal is handled for us, so return an empty, no-op disposable.
+            IDisposable.Empty }
+
+let inline private invokeAsync asyncMethod (args: SocketAsyncEventArgs) f =
+    Async.FromContinuations <| invoke(asyncMethod, f, args)
+
 type Socket with 
-    member s.AcceptAsyncSafe(callback, args) = invoke(s.AcceptAsync, callback, args) 
-    member s.ReceiveAsyncSafe(callback, args) = invoke(s.ReceiveAsync, callback, args) 
-    member s.SendAsyncSafe(callback, args) = invoke(s.SendAsync, callback, args) 
-    member s.ConnectAsyncSafe(callback, args) = invoke(s.ConnectAsync, callback, args)
-    member s.DisconnectAsyncSafe(callback, args: SocketAsyncEventArgs, ?reuseSocket) =
+    member s.AcceptObservable(args) = makeObservable s.AcceptAsync args id
+    member s.ReceiveObservable(args) = makeObservable s.ReceiveAsync args id
+    member s.SendObservable(args) = makeObservable s.SendAsync args id
+    member s.ConnectObservable(args) = makeObservable s.ConnectAsync args id
+    member s.DisconnectObservable(args: SocketAsyncEventArgs, ?reuseSocket) =
         let reuseSocket = defaultArg reuseSocket false
         args.DisconnectReuseSocket <- reuseSocket
-        invoke(s.DisconnectAsync, callback, args)
+        makeObservable s.DisconnectAsync args id
 
-    member s.AsyncAccept(args) = invokeAsync s.AcceptAsync args <| fun args -> args.AcceptSocket
+    member s.AsyncAccept(args) = invokeAsync s.AcceptAsync args <| fun args -> args.AcceptSocket, BS(args.Buffer, args.Offset, args.Count)
     member s.AsyncReceive(args) = invokeAsync s.ReceiveAsync args <| fun args -> BS(args.Buffer, args.Offset, args.Count)
     member s.AsyncSend(args) = invokeAsync s.SendAsync args ignore
-    member s.AsyncConnect(args) = invokeAsync s.ConnectAsync args ignore
+    member s.AsyncConnect(args) = invokeAsync s.ConnectAsync args <| fun args -> args.ConnectSocket, BS(args.Buffer, args.Offset, args.Count)
     member s.AsyncDisconnect(args: SocketAsyncEventArgs, ?reuseSocket) =
         let reuseSocket = defaultArg reuseSocket false
         args.DisconnectReuseSocket <- reuseSocket

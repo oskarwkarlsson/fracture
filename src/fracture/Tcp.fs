@@ -58,7 +58,8 @@ let internal completed (checkOutArgs, checkInArgs, checkInSocket, received, sent
                 let next : SocketAsyncEventArgs = checkOutArgs()
                 next.AcceptSocket <- args.AcceptSocket
                 next.UserToken <- args.UserToken
-                args.AcceptSocket.ReceiveAsyncSafe(completed, next)
+                // NOTE: the disposable is an empty disposable.
+                args.AcceptSocket.ReceiveObservable(next).Subscribe(completed) |> ignore
         // 0 bytes received means the client is disconnecting.
         else disconnected (args.UserToken :?> EndPoint)
     
