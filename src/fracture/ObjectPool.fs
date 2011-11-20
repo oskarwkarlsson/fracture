@@ -1,5 +1,6 @@
 ﻿namespace Fracture
 
+open System
 open System.Collections.Generic
 
 type Agent<'a> = MailboxProcessor<'a>
@@ -66,16 +67,19 @@ type ObjectPool<'a>(initialPoolCount, generate: unit -> 'a, ?cleanUp, ?autoGrow)
     member this.Count = count
 
     /// Gets an item from the pool or if there are none present use the generator
-    member this.Get(item) = agent.PostAndReply(Get)
+    member this.Get() = agent.PostAndReply(Get)
 
     /// Gets an item from the pool or if there are none present use the generator
-    member this.AsyncGet(item) = agent.PostAndAsyncReply(Get)
+    member this.AsyncGet() = agent.PostAndAsyncReply(Get)
 
     /// Puts an item into the pool
     member this.Put(item) = agent.Post(Put item)
 
     /// Clears the object pool, returning all of the data that was in the pool.
-    member this.Clear() = agent.Post(Clear)
+    member this.Dispose() = agent.Post(Clear)
+
+    interface IDisposable with
+        member this.Dispose() = this.Dispose()
 // [/snippet]
 
 #if INTERACTIVE
