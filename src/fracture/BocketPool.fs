@@ -33,8 +33,8 @@ type internal BocketPool(name, maxPoolCount, perBocketBufferSize) =
     let raiseDisposed() = raise(ObjectDisposedException(name))
     let raiseTimeout() = raise(TimeoutException(name))
 
-    static member inline TryTakeAsTuple (pool: BlockingCollection<_>) (timeout:int)  = 
-        let result = ref defaultof< 'a>
+    member inline x.TryTakeAsTuple(timeout:int)  = 
+        let result = ref null
         let success = pool.TryTake(result, timeout)
         (success, result)
 
@@ -47,9 +47,9 @@ type internal BocketPool(name, maxPoolCount, perBocketBufferSize) =
 
     member this.CheckOut() =
         if not !disposed then
-            let suc,res = BocketPool.TryTakeAsTuple pool 1000
-            if suc then 
-                res.Value 
+            let success, result = this.TryTakeAsTuple(1000)
+            if success then 
+                result.Value 
             else raiseTimeout()
             //checkedOperation pool.Take raiseDisposed
         else raiseDisposed()
