@@ -15,8 +15,8 @@ System.AppDomain.CurrentDomain.UnhandledException |> Observable.add debug
 let shortdate = DateTime.UtcNow.ToShortDateString
 open Fracture.HttpServer
 
-let status (major, minor) (statusCode: HttpStatusCode) (sb: StringBuilder) =
-    sb.AppendFormat("HTTP/{0}.{1} {2} {3}", major, minor, Convert.ToInt16(statusCode), statusCode).AppendLine()
+let status (major, minor) statusCode (sb: StringBuilder) =
+    sb.AppendFormat("HTTP/{0}.{1} {2}", major, minor, statusCode).AppendLine()
 
 let header (key, value) (sb: StringBuilder) = sb.AppendLine(key + ": " + value.ToString())
 
@@ -40,7 +40,7 @@ let onHeaders(headers: HttpRequestHeaders, keepAlive, server: HttpServer, connec
 
     let response =
         StringBuilder()
-        |> status (headers.Version.Major, headers.Version.Minor) HttpStatusCode.OK
+        |> status (headers.Version.Major, headers.Version.Minor) "200 OK"
         |> header ("Server", "Fracture")
         |> connectionHeader headers.Version.Minor keepAlive
         |> header ("Content-Type", "text/plain")
