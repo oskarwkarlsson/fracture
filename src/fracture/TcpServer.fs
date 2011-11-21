@@ -18,6 +18,10 @@ type TcpServer(poolSize, perOperationBufferSize, acceptBacklogCount, received, ?
     // Note: 288 bytes is the minimum size for a connection.
     let connectionPool = new BocketPool("connection pool", max (acceptBacklogCount * 2) 2, 288)
     let bocketPool = new BocketPool("regular pool", max poolSize 2, perOperationBufferSize)
+
+    // Create and fill the socket pool.
+    let socketPool = new ObjectPool<Socket>(acceptBacklogCount, Tcp.createTcpSocket)
+
     let clients = new ConcurrentDictionary<_,_>()
     let connections = ref 0
     let listeningSocket = Tcp.createTcpSocket()
@@ -29,12 +33,13 @@ type TcpServer(poolSize, perOperationBufferSize, acceptBacklogCount, received, ?
             if disposing then
                 disconnect false listeningSocket
                 connectionPool.Dispose()
+                socketPool.Dispose()
                 bocketPool.Dispose()
             disposed := true
 
-    let checkInSocket =
-        // TODO: switch to reusing sockets using a pool.
-        disconnect false
+    let checkInSocket socket =
+        disconnect true socket
+        socketPool.Put socket
 
     let completed = Tcp.completed(bocketPool.CheckOut, bocketPool.CheckIn, checkInSocket, received, sent, (!-- connections; disconnected), s)
     
@@ -45,7 +50,9 @@ type TcpServer(poolSize, perOperationBufferSize, acceptBacklogCount, received, ?
             let endPoint = acceptSocket.RemoteEndPoint
             try
                 // start next accept
+                let socket = socketPool.Get()
                 let saea = connectionPool.CheckOut()
+                saea.AcceptSocket <- socket
                 listeningSocket.AcceptAsyncSafe(processAccept, saea)
 
                 // process newly connected client
