@@ -31,11 +31,19 @@ type internal BocketPool(name, maxPoolCount, perBocketBufferSize) =
 
     let raiseDisposed() = raise(ObjectDisposedException(name))
 
+    member this.Start() =
+        for n in 0 .. maxPoolCount - 1 do
+            let args = new SocketAsyncEventArgs()
+            if totalsize > 0 then
+                args.SetBuffer(buffer, n*perBocketBufferSize, perBocketBufferSize)
+            this.CheckIn(args)
+
     member this.Start(callback) =
         for n in 0 .. maxPoolCount - 1 do
             let args = new SocketAsyncEventArgs()
             args.Completed |> Observable.add callback
-            args.SetBuffer(buffer, n*perBocketBufferSize, perBocketBufferSize)
+            if totalsize > 0 then
+                args.SetBuffer(buffer, n*perBocketBufferSize, perBocketBufferSize)
             this.CheckIn(args)
 
     member this.AsyncCheckOut(?timeout) =
