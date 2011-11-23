@@ -31,6 +31,6 @@ let complete (content: byte[]) : HttpResponse =
 
 let toString response =
     let sb = StringBuilder()
-    let writer = new StringWriter(sb)
+    let writer = new StringWriter(sb) :> TextWriter
     response writer
     sb.ToString()
