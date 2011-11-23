@@ -1,11 +1,10 @@
 ﻿module Fracture.Sockets
+#nowarn "40"
 
 open System
 open System.Net
 open System.Net.Sockets
 open FSharpx
-open SocketExtensions
-open Pipelets
 
 let inline acquireData(args: SocketAsyncEventArgs)= 
     //process received data
@@ -13,67 +12,51 @@ let inline acquireData(args: SocketAsyncEventArgs)=
     Buffer.BlockCopy(args.Buffer, args.Offset, data, 0, data.Length)
     data
 
-let inline disconnect reuseSocket (socket: Socket) =
-    if socket <> null then
-        try
-            if socket.Connected then
-                socket.Shutdown(SocketShutdown.Both)
-                socket.Disconnect(reuseSocket)
-        finally
-            if not reuseSocket then
-                socket.Close()
+(* Socket Extensions *)
 
-/// Sends data to the socket cached in the SAEA given, using the SAEA's buffer
-let inline send client completed (getArgs: unit -> SocketAsyncEventArgs) bufferLength (msg: byte[]) close = 
-    let rec loop offset =
-        if offset < msg.Length then
-            let args = getArgs()
-            let amountToSend = min (msg.Length - offset) bufferLength
-            args.AcceptSocket <- client
-            Buffer.BlockCopy(msg, offset, args.Buffer, args.Offset, amountToSend)
-            args.SetBuffer(args.Offset, amountToSend)
-            if client.Connected then 
-                client.SendAsyncSafe(completed, args)
-                loop (offset + amountToSend)
-            else Console.WriteLine(sprintf "Connection lost to%A" client.RemoteEndPoint)
-    loop 0
-    if close then
-        let args = getArgs()
-        args.AcceptSocket <- client
-        client.Shutdown(SocketShutdown.Both)
-        client.DisconnectAsyncSafe(completed, args)
-    
-type SocketListener(pipelet: Pipelet<unit,Socket>, backlog, perOperationBufferSize, addressFamily, socketType, protocolType) =
-    // Note: The per operation buffer size must be between 288 and 1024 bytes.
-    // Any less results in lost data, according to our testing. Any more,
-    // and the data is held until the first receive operation.
-    let perOperationBufferSize = (max 288 >> min 1024) perOperationBufferSize
-    let generateSocket() = new Socket(addressFamily, socketType, protocolType)
-    let socketPool = new ObjectPool<_>(backlog, generateSocket, cleanUp = disconnect false)
-    let bocketPool = new BocketPool("connection pool", max (backlog * 2) 2, perOperationBufferSize)
+/// Helper method to make Async calls easier.  InvokeAsyncMethod ensures the callback always
+/// gets called even if an error occurs or the Async method completes synchronously.
+let inline private invoke(asyncMethod, callback, args: SocketAsyncEventArgs) =
+    if not (asyncMethod args) then callback args
 
-    // NOTE: No longer need to track clients, as the SocketListener
-    // should pass a given socket off to the SocketReceiver, and if
-    // the connection should remain open, the SocketSender will send
-    // the connection back to the SocketReceiver and disconnect otherwise.
+exception SocketIssue of SocketError
+    with override this.ToString() = string this.Data0
 
-    // TODO: When accepting a connection, we need to also allocate and
-    // assign a socket from the socketPool to the bocket.
-    // Should sockets be pre-assigned to bockets?
+let inline private invokeAsync asyncMethod (args: SocketAsyncEventArgs) f =
+    Async.FromContinuations <| fun (cont,econt,ccont) ->
+        let k (args: SocketAsyncEventArgs) =
+            match args.SocketError with
+            | SocketError.Success -> cont <| f args
+            | e -> econt <| SocketIssue e
+        let rec finish cont value =
+            remover.Dispose()
+            cont value
+        and remover : IDisposable =
+            args.Completed.Subscribe
+                ({ new IObserver<_> with
+                    member x.OnNext(v) = finish k v
+                    member x.OnError(e) = finish econt e
+                    member x.OnCompleted() =
+                        let msg = "Cancelling the workflow, because the Observable awaited using AwaitObservable has completed."
+                        finish ccont (new System.OperationCanceledException(msg)) })
+        if not (asyncMethod args) then
+            finish k args
 
-// TODO: Are sender and receiver really any different?
-// Aren't they the same thing doing a slightly different operation?
-// An alternative implementation may be to pass in the operation.
+type Socket with 
+    member s.AcceptAsyncSafe(callback, args) = invoke(s.AcceptAsync, callback, args) 
+    member s.ReceiveAsyncSafe(callback, args) = invoke(s.ReceiveAsync, callback, args) 
+    member s.SendAsyncSafe(callback, args) = invoke(s.SendAsync, callback, args) 
+    member s.ConnectAsyncSafe(callback, args) = invoke(s.ConnectAsync, callback, args)
+    member s.DisconnectAsyncSafe(callback, args: SocketAsyncEventArgs, ?reuseSocket) =
+        let reuseSocket = defaultArg reuseSocket false
+        args.DisconnectReuseSocket <- reuseSocket
+        invoke(s.DisconnectAsync, callback, args)
 
-// NOTE: The current design below uses separate pools for send and receive.
-// TODO: Shared bocket pool? If so, who owns it? Does sharing a single pool
-// give any advantage?
-
-type SocketReceiver<'a>(pipelet: Pipelet<Socket,'a>, poolSize, perOperationBufferSize) =
-    let pool = new BocketPool("receive pool", max poolSize 2, perOperationBufferSize)
-
-type SocketSender<'a>(pipelet: Pipelet<Socket,'a>, poolSize, perOperationBufferSize) =
-    let pool = new BocketPool("send pool", max poolSize 2, perOperationBufferSize)
-    // TODO: SocketSender needs to know whether the connection should
-    // be closed or remain open. If it is to remain open, the SocketSender
-    // needs to send the connection back to a SocketReceiver.
+    member s.AsyncAccept(args) = invokeAsync s.AcceptAsync args <| fun args -> args.AcceptSocket
+    member s.AsyncReceive(args) = invokeAsync s.ReceiveAsync args <| fun args -> BS(args.Buffer, args.Offset, args.Count)
+    member s.AsyncSend(args) = invokeAsync s.SendAsync args ignore
+    member s.AsyncConnect(args) = invokeAsync s.ConnectAsync args ignore
+    member s.AsyncDisconnect(args: SocketAsyncEventArgs, ?reuseSocket) =
+        let reuseSocket = defaultArg reuseSocket false
+        args.DisconnectReuseSocket <- reuseSocket
+        invokeAsync s.DisconnectAsync args ignore

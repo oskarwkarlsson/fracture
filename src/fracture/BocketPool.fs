@@ -4,7 +4,6 @@ open System
 open System.Net.Sockets
 open System.Collections.Generic
 open System.Collections.Concurrent
-open SocketExtensions
 open Microsoft.FSharp.Core.Operators.Unchecked
 
 type internal BocketPool(name, maxPoolCount, perBocketBufferSize) =

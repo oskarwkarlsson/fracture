@@ -7,7 +7,7 @@ open System.Net
 open System.Net.Sockets
 open System.Reflection
 open Sockets
-open SocketExtensions
+open Tcp
 
 ///Creates a new TcpClient using the specified parameters
 type TcpClient(ipEndPoint, poolSize, size) as client =

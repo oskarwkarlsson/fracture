@@ -37,7 +37,6 @@
   <ItemGroup>
     <None Include="packages.config" />
     <Compile Include="Prelude.fs" />
-    <Compile Include="SocketExtensions.fs" />
     <Compile Include="ObjectPool.fs" />
     <Compile Include="BocketPool.fs" />
     <Compile Include="Pipelets.fs" />

@@ -7,7 +7,7 @@ open System.Net.Sockets
 open System.Collections.Generic
 open System.Collections.Concurrent
 open Sockets
-open SocketExtensions
+open Tcp
 
 /// Creates a new TcpServer using the specified parameters
 type TcpServer(poolSize, perOperationBufferSize, acceptBacklogCount, received, ?connected, ?disconnected, ?sent) as s =
