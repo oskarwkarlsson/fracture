@@ -1,6 +1,6 @@
 ﻿namespace Fracture
 
-type RemoteAgent(port, host) =
+type RemoteAgent() =
     let received _ = ()
     let server = TcpServer.Create(received) 
 
