@@ -7,6 +7,8 @@ open FSharp.Control
 open HttpMachine
 open HttpResponse
 
+type HttpApplication = HttpRequestHeaders -> AsyncSeq<ArraySegment<byte>> -> HttpResponse
+
 type HttpListener (poolSize, perOperationBufferSize, acceptBacklogCount) =
     let listener = new Tcp.Listener(poolSize, perOperationBufferSize, acceptBacklogCount)   
 
@@ -17,12 +19,12 @@ type HttpListener (poolSize, perOperationBufferSize, acceptBacklogCount) =
                 listener.Dispose()
             disposed := true
 
-    let runHttp (f: HttpRequestHeaders -> AsyncSeq<ArraySegment<byte>> -> HttpResponse) (client: Tcp.Client) =
+    let runHttp (f: HttpApplication) (client: Tcp.Client) =
         // TODO: Remove this value and replace with the actual value from the parser. The default depends on the HTTP version specified in the request.
         let keepAlive = true
 
         // Create an HTTP parser.
-        // TODO: Flip the parser delegate inside out to allow us to retrieve the values and build the headers and body iteratee.
+        // TODO: Flip the parser delegate inside out using Async.FromContinuations to allow us to retrieve the values and build the headers and body iteratee.
 //        let parserDelegate = ParserDelegate(onHeaders = (fun (headers, keepAlive) -> headers(headers, keepAlive, client)), 
 //                                            requestBody = (fun data -> (body(data, client))), 
 //                                            requestEnded = (fun req -> (requestEnd(req, client))))
@@ -54,4 +56,3 @@ type HttpListener (poolSize, perOperationBufferSize, acceptBacklogCount) =
 
     interface IDisposable with
         member this.Dispose() = this.Dispose()
-
