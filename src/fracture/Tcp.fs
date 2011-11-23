@@ -210,3 +210,12 @@ type Listener(poolSize, perOperationBufferSize, acceptBacklogCount) =
 
     interface IDisposable with
         member this.Dispose() = this.Dispose()
+
+type RemoteAgent(handler) =
+    let received _ = ()
+    let tcp = new Listener(poolSize = 30000, perOperationBufferSize = 1024, acceptBacklogCount = 10000)
+
+    member this.Start(address, port) =
+        handler |> tcp.Listen(address, port)
+
+    member this.Stop() = tcp.Dispose()
