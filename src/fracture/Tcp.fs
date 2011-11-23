@@ -1,6 +1,7 @@
 ﻿module Fracture.Tcp
 
 open System
+open System.Collections.Concurrent
 open System.Diagnostics
 open System.Net
 open System.Net.Sockets
@@ -92,3 +93,120 @@ let internal completed (checkOutArgs, checkInArgs, checkInSocket, received, sent
         else disconnected (args.UserToken :?> EndPoint)
     
     completed args
+
+[<StructAttribute>]
+type Client =
+    val RemoteEndPoint : IPEndPoint
+    /// Disconnected allows the creator of the TcpClient to handle
+    /// notification, cleanup, or reuse of the Socket.
+    val private Disconnected : IPEndPoint * Socket -> unit
+    val private Pool: BocketPool
+    val private Socket: Socket
+    new(socket: Socket, pool: BocketPool) =
+        { Disconnected = ignore
+          Pool = pool
+          RemoteEndPoint = socket.RemoteEndPoint :?> IPEndPoint
+          Socket = socket }
+    new(socket: Socket, pool: BocketPool, disconnected: IPEndPoint * Socket -> unit) =
+        { Disconnected = disconnected
+          Pool = pool
+          RemoteEndPoint = socket.RemoteEndPoint :?> IPEndPoint
+          Socket = socket }
+
+    // TODO: Add static AsyncConnect() method.
+
+    member this.AsyncReceive() =
+        let socket = this.Socket
+        let pool = this.Pool
+        async {
+            let! args = pool.AsyncCheckOut()
+            args.AcceptSocket <- socket
+            let! data = socket.AsyncReceive(args)
+            pool.CheckIn(args)
+            return data }
+
+    member this.AsyncSend(msg: byte[]) =
+        let socket = this.Socket
+        let pool = this.Pool
+        let rec loop offset = async {
+            if offset < msg.Length then
+                if socket.Connected then 
+                    let! args = pool.AsyncCheckOut()
+                    args.AcceptSocket <- socket
+                    let amountToSend = min (msg.Length - offset) pool.BufferSizePerBocket
+                    Buffer.BlockCopy(msg, offset, args.Buffer, args.Offset, amountToSend)
+                    args.SetBuffer(args.Offset, amountToSend)
+                    do! socket.AsyncSend(args)
+                    pool.CheckIn(args)
+                    return! loop (offset + amountToSend)
+                else Console.WriteLine("Connection lost to {0}", socket.RemoteEndPoint) }
+        loop 0
+
+    member this.AsyncDisconnect() = this.AsyncDisconnect(false)
+
+    /// TODO: Once socket reuse is available, make this a public member.
+    member private this.AsyncDisconnect(reuseSocket) =
+        let socket = this.Socket
+        let remoteEndPoint = this.RemoteEndPoint
+        let pool = this.Pool
+        let disconnected = this.Disconnected
+        async {
+            // NOTE: A try ... finally may be a good idea here.
+            if socket <> null && socket.Connected then
+                socket.Shutdown(SocketShutdown.Both)
+                let! args = pool.AsyncCheckOut()
+                do! socket.AsyncDisconnect(args, reuseSocket)
+                pool.CheckIn(args)
+            disconnected(remoteEndPoint, socket)
+            if not reuseSocket && socket <> null then socket.Close() }
+
+type Listener(poolSize, perOperationBufferSize, acceptBacklogCount) =
+    let connectionPool = new BocketPool("connection pool", max (acceptBacklogCount * 2) 2, 0)
+    let receiveSendPool = new BocketPool("regular pool", max poolSize 2, perOperationBufferSize)
+    let clients = new ConcurrentDictionary<IPEndPoint, Client>()
+    let connections = ref 0
+    let listeningSocket = createTcpSocket()
+
+    let connected(client: Client) =
+        !++connections
+        clients.TryAdd(client.RemoteEndPoint, client) |> ignore
+
+    let disconnected(endPoint, socket) =
+        !--connections
+        clients.TryRemove(endPoint) |> ignore
+
+    let accept f =
+        let rec loop() = async {
+            let! args = connectionPool.AsyncCheckOut()
+            let! acceptSocket = listeningSocket.AsyncAccept(args)
+            let client = Client(acceptSocket, receiveSendPool, disconnected)
+            connected client
+            Async.Start (f client)
+            return! loop() }
+        loop()
+
+    let disposed = ref false
+    let cleanUp disposing =
+        if not !disposed then
+            if disposing then
+                clients.Clear()
+                connectionPool.Dispose()
+                receiveSendPool.Dispose()
+                listeningSocket.Close()
+            disposed := true
+
+    member this.Listen(ipAddress: IPAddress, port) f =
+        connectionPool.Start()
+        receiveSendPool.Start()
+        listeningSocket.Bind(IPEndPoint(ipAddress, port))
+        // TODO: Test whether starting the max allowed accept processes in parallel is better.
+        Async.Start (accept f)
+
+    member this.Dispose() =
+        cleanUp true
+        GC.SuppressFinalize(this)
+
+    override this.Finalize() = cleanUp false
+
+    interface IDisposable with
+        member this.Dispose() = this.Dispose()
