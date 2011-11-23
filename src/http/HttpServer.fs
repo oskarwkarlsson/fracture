@@ -29,7 +29,7 @@ type HttpServer(headers, body, requestEnd) as this =
                 (svr :> IDisposable).Dispose()
             disposed := true
         
-    member h.Start(port) = svr.Listen(IPAddress.Loopback, port)
+    member h.Start(port) = svr.Listen(IPAddress.Any, port)
 
     member h.Send(client: Socket, response: string, close) = 
         let encoded = Encoding.ASCII.GetBytes(response)
