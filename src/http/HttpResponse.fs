@@ -8,6 +8,9 @@ open FSharpx.Reader
 
 type HttpResponse = Reader<TextWriter, unit>
 let respond = reader
+let empty = respond.Zero<TextWriter>()
+
+/// Pipe operator which allows chaining response builder functions.
 let inline ( *>) x y = map2 (fun _ z -> z) x y
 
 let status (major, minor) statusCode : HttpResponse =
@@ -28,9 +31,24 @@ let complete (content: byte[]) : HttpResponse =
         writer.WriteLine()
         if content <> null && content.Length > 0 then
             writer.Write(content)
+        writer.Flush()
+
+let toArray response =
+    use stream = new MemoryStream()
+    // Default is to ASCII, which is standard for HTTP messages.
+    // In general, HTTP headers should be safe in any encoding.
+    use writer = new StreamWriter(stream, Encoding.ASCII) :> TextWriter
+    response writer
+    stream.GetBuffer()
+    
+let toEncoded encoding response =
+    use stream = new MemoryStream()
+    use writer = new StreamWriter(stream, encoding) :> TextWriter
+    response writer
+    stream.GetBuffer()
 
 let toString response =
     let sb = StringBuilder()
-    let writer = new StringWriter(sb) :> TextWriter
+    use writer = new StringWriter(sb) :> TextWriter
     response writer
     sb.ToString()
