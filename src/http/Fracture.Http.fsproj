@@ -34,8 +34,8 @@
   </PropertyGroup>
   <Import Project="..\..\lib\FSharp\v4.0\bin\Microsoft.FSharp.Targets" />
   <ItemGroup>
+    <Compile Include="Http.fs" />
     <Compile Include="Hex.fs" />
-    <Compile Include="HttpMachineTemp.fs" />
     <Compile Include="HttpServer.fs" />
     <None Include="packages.config" />
   </ItemGroup>

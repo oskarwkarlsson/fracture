@@ -1,4 +1,4 @@
-﻿module Fracture.HttpServer
+﻿namespace Fracture.Http
 
 open System
 open System.Collections.Concurrent
@@ -16,7 +16,7 @@ type HttpServer(headers, body, requestEnd) as this =
 
     let svr = TcpServer.Create((fun (data, svr, conn, endPoint) -> 
         let parser =
-            let parserDelegate = ParserDelegate(requestBegan = (fun (a,b) -> headers(a, b, this, conn, endPoint)), 
+            let parserDelegate = ParserDelegate(onHeaders = (fun (a,b) -> headers(a, b, this, conn, endPoint)), 
                                                 requestBody = (fun data -> (body(data, svr, conn, endPoint))), 
                                                 requestEnded = (fun req -> (requestEnd(req, svr, conn, endPoint))))
             HttpParser(parserDelegate)

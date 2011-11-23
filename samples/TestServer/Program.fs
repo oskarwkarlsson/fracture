@@ -4,8 +4,7 @@ open System.Diagnostics
 open System.Net
 open System.Text
 open Fracture
-open Fracture.Sockets
-open HttpMachine
+open Fracture.Http
 
 let debug (x:UnhandledExceptionEventArgs) =
     Console.WriteLine(sprintf "%A" (x.ExceptionObject :?> Exception))
@@ -13,7 +12,6 @@ let debug (x:UnhandledExceptionEventArgs) =
 
 System.AppDomain.CurrentDomain.UnhandledException |> Observable.add debug
 let shortdate = DateTime.UtcNow.ToShortDateString
-open Fracture.HttpServer
 
 let status (major, minor) statusCode (sb: StringBuilder) =
     sb.AppendFormat("HTTP/{0}.{1} {2}", major, minor, statusCode).AppendLine()
