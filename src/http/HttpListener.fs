@@ -1,9 +1,11 @@
 ﻿namespace Fracture.Http
 
 open System
+open System.IO
 open Fracture
 open FSharp.Control
 open HttpMachine
+open HttpResponse
 
 type HttpListener (poolSize, perOperationBufferSize, acceptBacklogCount) =
     let listener = new Tcp.Listener(poolSize, perOperationBufferSize, acceptBacklogCount)   
@@ -15,10 +17,12 @@ type HttpListener (poolSize, perOperationBufferSize, acceptBacklogCount) =
                 listener.Dispose()
             disposed := true
 
-    let runHttp (f: HttpRequestHeaders -> AsyncSeq<ArraySegment<byte>> -> string * seq<string * string> * byte[]) (client: Tcp.Client) =
-        // TODO: Remove this value and replace with the actual value from the parser.
-        let keepAlive = false
+    let runHttp (f: HttpRequestHeaders -> AsyncSeq<ArraySegment<byte>> -> HttpResponse) (client: Tcp.Client) =
+        // TODO: Remove this value and replace with the actual value from the parser. The default depends on the HTTP version specified in the request.
+        let keepAlive = true
+
         // Create an HTTP parser.
+        // TODO: Flip the parser delegate inside out to allow us to retrieve the values and build the headers and body iteratee.
 //        let parserDelegate = ParserDelegate(onHeaders = (fun (headers, keepAlive) -> headers(headers, keepAlive, client)), 
 //                                            requestBody = (fun data -> (body(data, client))), 
 //                                            requestEnded = (fun req -> (requestEnd(req, client))))
@@ -31,12 +35,11 @@ type HttpListener (poolSize, perOperationBufferSize, acceptBacklogCount) =
 //        parser.Execute(new ArraySegment<_>(data)) |> ignore
 
         // Execute the provided function on the request and content.
-        let response = Array.empty
-
+        let response = HttpResponse.empty // <-- Should call f on the request headers and body iteratee.
+        
         // Send the response.
         async {
-            do! client.AsyncSend(response)
-    
+            do! client.AsyncSend(response |> HttpResponse.toArray)
             if not keepAlive then
                 do! client.AsyncDisconnect() }
 
