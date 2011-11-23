@@ -17,7 +17,7 @@ let shortdate = DateTime.UtcNow.ToShortDateString
 
 let onHeaders(headers: HttpRequestHeaders, keepAlive, server: HttpServer, connection, endPoint) =
 
-    let response : HttpResponse =
+    let response =
         status (headers.Version.Major, headers.Version.Minor) "200 OK"
         *> header ("Server", "Fracture")
         *> connectionHeader headers.Version.Minor keepAlive
