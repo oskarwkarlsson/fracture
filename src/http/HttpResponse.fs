@@ -1,24 +1,36 @@
 ﻿module Fracture.Http.HttpResponse
 
+open System.IO
 open System.Text
+open FSharpx.Reader
 
-let status (major, minor) statusCode (sb: StringBuilder) =
-    sb.AppendFormat("HTTP/{0}.{1} {2}", major, minor, statusCode).AppendLine()
+(* Simple HTTP Response DSL *)
 
-let header (key, value) (sb: StringBuilder) = sb.AppendLine(key + ": " + value.ToString())
+type HttpResponse = Reader<TextWriter, unit>
+let respond = reader
+let inline ( *>) x y = map2 (fun _ z -> z) x y
 
-let connectionHeader minor keepAlive (sb: StringBuilder) =
-    if keepAlive then
-        if minor = 0 then
-            sb |> header ("Connection", "Keep-Alive")
-        else sb
-    else
-        if minor = 1 then
-            sb |> header ("Connection", "Close")
-        else sb
+let status (major, minor) statusCode : HttpResponse =
+    fun writer -> writer.WriteLine("HTTP/{0}.{1} {2}", major, minor, statusCode)
 
-let complete (content: byte[]) (sb: StringBuilder) =
-    sb.AppendLine() |> ignore
-    if content <> null && content.Length > 0 then
-        sb.Append(content).ToString()
-    else sb.ToString()
+let header (key: string, value) : HttpResponse =
+    fun writer -> writer.WriteLine(key + ": " + value.ToString())
+
+let connectionHeader minor keepAlive : HttpResponse =
+    if keepAlive && minor = 0 then
+        header ("Connection", "Keep-Alive")
+    elif not keepAlive && minor = 1 then
+        header ("Connection", "Close")
+    else respond.Zero()
+
+let complete (content: byte[]) : HttpResponse =
+    fun writer ->
+        writer.WriteLine()
+        if content <> null && content.Length > 0 then
+            writer.Write(content)
+
+let toString response =
+    let sb = StringBuilder()
+    let writer = new StringWriter(sb)
+    response writer
+    sb.ToString()

@@ -1,6 +1,7 @@
 ﻿open System
 open System.Collections.Generic
 open System.Diagnostics
+open System.IO
 open System.Net
 open System.Text
 open Fracture
@@ -16,16 +17,15 @@ let shortdate = DateTime.UtcNow.ToShortDateString
 
 let onHeaders(headers: HttpRequestHeaders, keepAlive, server: HttpServer, connection, endPoint) =
 
-    let response =
-        StringBuilder()
-        |> status (headers.Version.Major, headers.Version.Minor) "200 OK"
-        |> header ("Server", "Fracture")
-        |> connectionHeader headers.Version.Minor keepAlive
-        |> header ("Content-Type", "text/plain")
-        |> header ("Content-Length", 12)
-        |> complete "Hello world."B
+    let response : HttpResponse =
+        status (headers.Version.Major, headers.Version.Minor) "200 OK"
+        *> header ("Server", "Fracture")
+        *> connectionHeader headers.Version.Minor keepAlive
+        *> header ("Content-Type", "text/plain")
+        *> header ("Content-Length", 12)
+        *> complete "Hello world."B
 
-    server.Send(connection, response, not keepAlive)
+    server.Send(connection, response |> HttpResponse.toString, not keepAlive)
 
 let server = new HttpServer(headers = onHeaders, body = ignore, requestEnd = ignore)
 
