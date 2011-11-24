@@ -23,7 +23,7 @@ type HttpServer(headers, body, requestEnd) as this =
         parser.Execute(new ArraySegment<_>(data)) |> ignore))
 
     //ensures the listening socket is shutdown on disposal.
-    let cleanUp disposing = 
+    let cleanUp disposing =
         if not !disposed then
             if disposing && svr <> Unchecked.defaultof<TcpServer> then
                 (svr :> IDisposable).Dispose()
@@ -31,9 +31,9 @@ type HttpServer(headers, body, requestEnd) as this =
         
     member h.Start(port) = svr.Listen(IPAddress.Any, port)
 
-    member h.Send(client: Socket, response: string, close) = 
-        let encoded = Encoding.ASCII.GetBytes(response)
-        svr.Send(client, encoded, close)
+    member h.Send(client: Socket, response: byte[], close) =
+////        Console.WriteLine(Encoding.ASCII.GetString(response))
+        svr.Send(client, response, close)
 
     interface IDisposable with
         member h.Dispose() =

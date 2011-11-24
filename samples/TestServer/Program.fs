@@ -23,9 +23,9 @@ let onHeaders(headers: HttpRequestHeaders, keepAlive, server: HttpServer, connec
         *> connectionHeader headers.Version.Minor keepAlive
         *> header ("Content-Type", "text/plain")
         *> header ("Content-Length", 12)
-        *> complete "Hello world."B
+        *> complete "Hello world."
 
-    server.Send(connection, response |> HttpResponse.toString, not keepAlive)
+    server.Send(connection, response |> HttpResponse.toArray, not keepAlive)
 
 let server = new HttpServer(headers = onHeaders, body = ignore, requestEnd = ignore)
 

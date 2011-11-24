@@ -13,11 +13,11 @@ let empty = respond.Zero<TextWriter>()
 /// Pipe operator which allows chaining response builder functions.
 let inline ( *>) x y = map2 (fun _ z -> z) x y
 
-let status (major, minor) statusCode : HttpResponse =
-    fun writer -> writer.WriteLine("HTTP/{0}.{1} {2}", major, minor, statusCode)
+let status (major, minor) statusCode (writer: TextWriter) =
+    writer.WriteLine("HTTP/{0}.{1} {2}", major, minor, statusCode)
 
-let header (key: string, value) : HttpResponse =
-    fun writer -> writer.WriteLine(key + ": " + value.ToString())
+let header (key: string, value) (writer: TextWriter) =
+    writer.WriteLine(key + ": " + value.ToString())
 
 let connectionHeader minor keepAlive : HttpResponse =
     if keepAlive && minor = 0 then
@@ -26,12 +26,11 @@ let connectionHeader minor keepAlive : HttpResponse =
         header ("Connection", "Close")
     else respond.Zero()
 
-let complete (content: byte[]) : HttpResponse =
-    fun writer ->
-        writer.WriteLine()
-        if content <> null && content.Length > 0 then
-            writer.Write(content)
-        writer.Flush()
+let complete (content: string) (writer: TextWriter) =
+    writer.WriteLine()
+    if content <> null && content.Length > 0 then
+        writer.Write(content)
+    writer.Flush()
 
 let toArray response =
     use stream = new MemoryStream()
