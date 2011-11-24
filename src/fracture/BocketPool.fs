@@ -30,6 +30,7 @@ type BocketPool(name, maxPoolCount, perBocketBufferSize) =
         | :? InvalidOperationException -> onFailure()
 
     let raiseDisposed() = raise(ObjectDisposedException(name))
+    let raiseTimeout() = raise(TimeoutException())
 
     member this.Start() =
         for n in 0 .. maxPoolCount - 1 do
@@ -46,14 +47,14 @@ type BocketPool(name, maxPoolCount, perBocketBufferSize) =
                 args.SetBuffer(buffer, n*perBocketBufferSize, perBocketBufferSize)
             this.CheckIn(args)
 
-    member this.AsyncCheckOut(?timeout) =
-        if not !disposed then
-            pool.AsyncTryTake(?timeout = timeout)
-        else raiseDisposed()
-
     member this.CheckOut(?timeout) =
         if not !disposed then
-            pool.TryTakeAsync(?timeout = timeout).Result
+            let timeout = defaultArg timeout 1000
+            let result = ref Unchecked.defaultof<_>
+            let success = pool.TryTake(result, timeout)
+            if success then
+                !result
+            else raiseTimeout()
         else raiseDisposed()
 
     member this.CheckIn(args) =

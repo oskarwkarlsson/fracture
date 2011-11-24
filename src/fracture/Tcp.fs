@@ -119,7 +119,7 @@ type Client =
         let socket = this.Socket
         let pool = this.Pool
         async {
-            let! args = pool.AsyncCheckOut()
+            let args = pool.CheckOut()
             args.AcceptSocket <- socket
             let! data = socket.AsyncReceive(args)
             pool.CheckIn(args)
@@ -131,7 +131,7 @@ type Client =
         let rec loop offset = async {
             if offset < msg.Length then
                 if socket.Connected then 
-                    let! args = pool.AsyncCheckOut()
+                    let args = pool.CheckOut()
                     args.AcceptSocket <- socket
                     let amountToSend = min (msg.Length - offset) pool.BufferSizePerBocket
                     Buffer.BlockCopy(msg, offset, args.Buffer, args.Offset, amountToSend)
@@ -154,7 +154,7 @@ type Client =
             // NOTE: A try ... finally may be a good idea here.
             if socket <> null && socket.Connected then
                 socket.Shutdown(SocketShutdown.Both)
-                let! args = pool.AsyncCheckOut()
+                let args = pool.CheckOut()
                 do! socket.AsyncDisconnect(args, reuseSocket)
                 pool.CheckIn(args)
             disconnected(remoteEndPoint, socket)
@@ -177,7 +177,7 @@ type Listener(poolSize, perOperationBufferSize, acceptBacklogCount) =
 
     let accept f =
         let rec loop() = async {
-            let! args = connectionPool.AsyncCheckOut()
+            let args = connectionPool.CheckOut()
             let! acceptSocket = listeningSocket.AsyncAccept(args)
             let client = Client(acceptSocket, receiveSendPool, disconnected)
             connected client
