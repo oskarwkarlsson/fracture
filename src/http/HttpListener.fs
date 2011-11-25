@@ -48,7 +48,7 @@ type HttpListener (poolSize, perOperationBufferSize, acceptBacklogCount) =
 
         let rec loop (client: Tcp.Client) = async {
             let! data = client.AsyncReceive()
-            if parser.Execute(data) > 0 then
+            if parser.Execute(data) = perOperationBufferSize then
                 do! loop client }
         loop client
 

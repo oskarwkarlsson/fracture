@@ -21,7 +21,7 @@ let inline private invoke(asyncMethod, callback, args: SocketAsyncEventArgs) =
 exception SocketIssue of SocketError
     with override this.ToString() = string this.Data0
 
-let private invokeAsync asyncMethod (args: SocketAsyncEventArgs) f =
+let inline private invokeAsync asyncMethod (args: SocketAsyncEventArgs) f =
     Async.FromContinuations <| fun (cont,econt,ccont) ->
         let k (args: SocketAsyncEventArgs) =
             match args.SocketError with
@@ -52,7 +52,7 @@ type Socket with
         invoke(s.DisconnectAsync, callback, args)
 
     member s.AsyncAccept(args) = invokeAsync s.AcceptAsync args <| fun args -> args.AcceptSocket
-    member s.AsyncReceive(args) = invokeAsync s.ReceiveAsync args <| fun args -> ArraySegment<_>(args.Buffer, args.Offset, args.Count)
+    member s.AsyncReceive(args) = invokeAsync s.ReceiveAsync args <| fun args -> ArraySegment<_>(args.Buffer, args.Offset, args.BytesTransferred)
     member s.AsyncSend(args) = invokeAsync s.SendAsync args ignore
     member s.AsyncConnect(args) = invokeAsync s.ConnectAsync args ignore
     member s.AsyncDisconnect(args: SocketAsyncEventArgs, ?reuseSocket) =

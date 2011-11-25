@@ -119,7 +119,7 @@ type AgentParserDelegate(agent: Agent<HttpParsedMessage>, client: Tcp.Client) as
     [<DefaultValue>] val mutable headerName : string
     [<DefaultValue>] val mutable headerValue : string
     [<DefaultValue>] val mutable requestHeaders:HttpRequestHeaders 
-    [<DefaultValue>] val mutable body:ArraySegment<byte> list -> ArraySegment<byte> list
+    let mutable body : ArraySegment<byte> list -> ArraySegment<byte> list = id
     let mutable headers = new Dictionary<string,string>()
 
     let commitHeader() = 
@@ -178,7 +178,8 @@ type AgentParserDelegate(agent: Agent<HttpParsedMessage>, client: Tcp.Client) as
 
         member this.OnBody(_, data) =
             if data.Count > 0 then
-                p.body <- (fun rest -> p.body(data :: rest))
+                let cont = body
+                body <- (fun rest -> cont(data :: rest))
 
         member this.OnMessageEnd(_) =
-            agent.Post(Body(client.RemoteEndPoint, p.body []))
+            agent.Post(Body(client.RemoteEndPoint, body []))
