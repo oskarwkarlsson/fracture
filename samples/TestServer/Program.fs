@@ -15,20 +15,16 @@ let debug (x:UnhandledExceptionEventArgs) =
 System.AppDomain.CurrentDomain.UnhandledException |> Observable.add debug
 let shortdate = DateTime.UtcNow.ToShortDateString
 
-let onHeaders(headers: HttpRequestHeaders, keepAlive, server: HttpServer, connection, endPoint) =
+let app headers content =
+    status (headers.Version.Major, headers.Version.Minor) "200 OK"
+    *> header ("Server", "Fracture")
+    *> connectionHeader headers.Version.Minor headers.KeepAlive
+    *> header ("Content-Type", "text/plain")
+    *> header ("Content-Length", 12)
+    *> complete "Hello world."
 
-    let response =
-        status (headers.Version.Major, headers.Version.Minor) "200 OK"
-        *> header ("Server", "Fracture")
-        *> connectionHeader headers.Version.Minor keepAlive
-        *> header ("Content-Type", "text/plain")
-        *> header ("Content-Length", 12)
-        *> complete "Hello world."
+app |> HttpListener.Start(IPAddress.Any, 6667)
 
-    server.Send(connection, response |> HttpResponse.toArray, not keepAlive)
-
-let server = new HttpServer(headers = onHeaders, body = ignore, requestEnd = ignore)
-
-server.Start(6667)
 printfn "Http Server started"
+
 Console.ReadKey() |> ignore

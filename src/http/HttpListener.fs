@@ -1,13 +1,15 @@
 ﻿namespace Fracture.Http
 
 open System
+open System.Collections.Generic
+open System.Net
 open System.IO
 open Fracture
 open FSharp.Control
 open HttpMachine
 open HttpResponse
 
-type HttpApplication = HttpRequestHeaders -> AsyncSeq<ArraySegment<byte>> -> HttpResponse
+type HttpApplication = HttpRequestHeaders -> ArraySegment<byte> list -> HttpResponse
 
 type HttpListener (poolSize, perOperationBufferSize, acceptBacklogCount) =
     let listener = new Tcp.Listener(poolSize, perOperationBufferSize, acceptBacklogCount)   
@@ -19,34 +21,43 @@ type HttpListener (poolSize, perOperationBufferSize, acceptBacklogCount) =
                 listener.Dispose()
             disposed := true
 
-    let runHttp (f: HttpApplication) (client: Tcp.Client) =
-        // TODO: Remove this value and replace with the actual value from the parser. The default depends on the HTTP version specified in the request.
-        let keepAlive = true
+    let httpAgent f =
+        Agent<_>.Start(fun inbox ->
+            let clientState = new Dictionary<IPEndPoint, Tcp.Client * HttpRequestHeaders>()
+            let rec loop() = async {
+                let! msg = inbox.Receive()
+                match msg with
+                | Start(client) ->
+                    clientState.[client.RemoteEndPoint] <- (client, HttpRequestHeaders.Default)
+                    do! loop()
+                | Headers(endPoint, headers) ->
+                    let client, _ = clientState.[endPoint]
+                    clientState.[endPoint] <- (client, headers)
+                    do! loop()
+                | Body(endPoint, body) ->
+                    let client, headers = clientState.[endPoint]
+                    do! client.AsyncSend(f headers body |> HttpResponse.toArray)
+                    if not headers.KeepAlive then
+                        do! client.AsyncDisconnect()
+                    clientState.Remove(endPoint) |> ignore
+                    do! loop() }
+            loop())
 
-        // Create an HTTP parser.
-        // TODO: Flip the parser delegate inside out using Async.FromContinuations to allow us to retrieve the values and build the headers and body iteratee.
-//        let parserDelegate = ParserDelegate(onHeaders = (fun (headers, keepAlive) -> headers(headers, keepAlive, client)), 
-//                                            requestBody = (fun data -> (body(data, client))), 
-//                                            requestEnded = (fun req -> (requestEnd(req, client))))
-//        let parser = HttpParser(parserDelegate)
-    
-        // Receive in a loop until the headers are read.
-//        parser.Execute(new ArraySegment<_>(data)) |> ignore
+    let runHttp agent client =
+        let parser = HttpParser(AgentParserDelegate(agent, client))
 
-        // Create an AsyncSeq of the remaining content to be read.
-//        parser.Execute(new ArraySegment<_>(data)) |> ignore
+        let rec loop (client: Tcp.Client) = async {
+            let! data = client.AsyncReceive()
+            if parser.Execute(data) > 0 then
+                do! loop client }
+        loop client
 
-        // Execute the provided function on the request and content.
-        let response = HttpResponse.empty // <-- Should call f on the request headers and body iteratee.
-        
-        // Send the response.
-        async {
-            do! client.AsyncSend(response |> HttpResponse.toArray)
-            if not keepAlive then
-                do! client.AsyncDisconnect() }
+    static member Start(ipAddress, port) f =
+        let listener = new HttpListener(30000, 1024, 10000)
+        listener.Listen(ipAddress, port) f
 
     member this.Listen (ipAddress, port) f =
-        listener.Listen(ipAddress, port) (runHttp f)
+        listener.Listen(ipAddress, port) (runHttp (httpAgent f))
 
     member this.Dispose() =
         cleanUp true

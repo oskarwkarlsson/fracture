@@ -175,7 +175,7 @@ type Listener(poolSize, perOperationBufferSize, acceptBacklogCount) =
         !--connections
         clients.TryRemove(endPoint) |> ignore
 
-    let accept f =
+    let accept f : Async<unit> =
         let rec loop() = async {
             let args = connectionPool.CheckOut()
             let! acceptSocket = listeningSocket.AsyncAccept(args)
@@ -199,8 +199,12 @@ type Listener(poolSize, perOperationBufferSize, acceptBacklogCount) =
         connectionPool.Start()
         receiveSendPool.Start()
         listeningSocket.Bind(IPEndPoint(ipAddress, port))
-        // TODO: Test whether starting the max allowed accept processes in parallel is better.
+        listeningSocket.Listen(acceptBacklogCount)
         Async.Start (accept f)
+//        [| for i in 1 .. acceptBacklogCount -> accept f |]
+//        |> Async.Parallel
+//        |> Async.RunSynchronously
+//        |> ignore
 
     member this.Dispose() =
         cleanUp true
