@@ -69,17 +69,19 @@
     <Compile Include="TcpServer.fs" />
   </ItemGroup>
   <ItemGroup>
-    <Reference Include="FSharp.AsyncExtensions">
-      <HintPath>..\..\packages\FSharpx.Core.1.3.111030\lib\FSharp.AsyncExtensions.dll</HintPath>
-      <Private>True</Private>
+    <Reference Include="FSharpx.Async">
+      <HintPath>..\..\packages\FSharpx.Core.1.4.120204\lib\FSharpx.Async.dll</HintPath>
     </Reference>
     <Reference Include="FSharpx.Core">
-      <HintPath>..\..\packages\FSharpx.Core.1.3.111030\lib\FSharpx.Core.dll</HintPath>
+      <HintPath>..\..\packages\FSharpx.Core.1.4.120204\lib\FSharpx.Core.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="FSharpx.Http">
-      <HintPath>..\..\packages\FSharpx.Core.1.3.111030\lib\FSharpx.Http.dll</HintPath>
+      <HintPath>..\..\packages\FSharpx.Core.1.4.120204\lib\FSharpx.Http.dll</HintPath>
       <Private>True</Private>
+    </Reference>
+    <Reference Include="FSharpx.Observable">
+      <HintPath>..\..\packages\FSharpx.Core.1.4.120204\lib\FSharpx.Observable.dll</HintPath>
     </Reference>
     <Reference Include="mscorlib" />
     <Reference Include="FSharp.Core">

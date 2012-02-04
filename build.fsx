@@ -119,9 +119,7 @@ Target "BuildNuGet" (fun _ ->
     [ buildDir + "Fracture.dll"
       buildDir + "Fracture.pdb"
       buildDir + "Fracture.Http.dll"
-      buildDir + "Fracture.Http.pdb"
-      buildDir + "FParsecCS.dll"
-      buildDir + "FParsec.dll" ]
+      buildDir + "Fracture.Http.pdb" ]
         |> CopyTo nugetLibDir
 
     NuGet (fun p -> 
