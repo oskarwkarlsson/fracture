@@ -6,13 +6,7 @@ open FParsec.CharParsers
 open Primitives
 open CharParsers
 
-type UriKind =
-  | AbsoluteUri  of UriPart list
-  | RelativeUri  of UriPart list
-  | UriAuthority of UriPart list
-  | FragmentRef  of UriPart
-  | AnyUri
-and UriPart =
+type UriPart =
   | Scheme      of string
   | UserInfo    of string
   | Host        of string
@@ -20,6 +14,32 @@ and UriPart =
   | Path        of string
   | QueryString of string
   | Fragment    of string
+  with
+  override x.ToString() =
+    match x with
+    | Scheme      v -> v + "://"
+    | UserInfo    v -> v + "@"
+    | Host        v -> v
+    | Port        v -> ":" + v
+    | Path        v -> v
+    | QueryString v -> if String.IsNullOrEmpty v then "" else "?" + v
+    | Fragment    v -> if String.IsNullOrEmpty v then "" else "#" + v
+    
+type UriKind =
+  | AbsoluteUri  of UriPart list
+  | RelativeUri  of UriPart list
+  | UriAuthority of UriPart list
+  | FragmentRef  of UriPart
+  | AnyUri
+  with
+  override x.ToString() =
+    let toString = List.map (fun v' -> v'.ToString()) >> List.reduce (+)
+    match x with
+    | AbsoluteUri  v -> v |> toString
+    | RelativeUri  v -> v |> toString
+    | UriAuthority v -> v |> toString
+    | FragmentRef  v -> v.ToString()
+    | AnyUri         -> "*"
 
 let mark<'a> : Parser<char,'a> = anyOf "-_.!~*'()"
 let reserved<'a> : Parser<char,'a> = anyOf ";/?:@&=+$,"

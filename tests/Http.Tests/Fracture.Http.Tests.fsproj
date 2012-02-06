@@ -39,8 +39,8 @@
     <Compile Include="PrimitivesTest.fs" />
     <Compile Include="CharParsersTest.fs" />
     <Compile Include="UriTest.fs" />
-    <Compile Include="HttpTestRequests.fs" />
     <Compile Include="HttpTest.fs" />
+    <Compile Include="HttpTestRequests.fs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="FParsec">
