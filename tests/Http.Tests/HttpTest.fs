@@ -11,32 +11,6 @@ open Fracture.Http.Http
 open NUnit.Framework
 open FsUnit
 
-type TestHandler() =
-  let mutable onMessageBeginWasCalled = false
-  let mutable startLine = Unchecked.defaultof<HttpRequestLine>
-  let mutable headers : HttpHeader list = []
-  let mutable onHeadersEndWasCalled = false
-  let mutable body = Unchecked.defaultof<HttpMessageBody>
-  let mutable onMessageEndWasCalled = false
-  let mutable error = Unchecked.defaultof<ParserError>
-
-  member this.OnHttpMessageBeginWasCalled = onMessageBeginWasCalled
-  member this.StartLine = startLine
-  member this.Headers = headers
-  member this.OnHeadersEndWasCalled = onHeadersEndWasCalled
-  member this.Body = body
-  member this.OnHttpMessageEndWasCalled = onMessageEndWasCalled
-  member this.Error = error
-
-  interface IHttpMessageParserHandler with
-    member this.OnHttpMessageBegin() = onMessageBeginWasCalled <- true
-    member this.OnStartLine(v) = startLine <- v
-    member this.OnHeader(v) = headers <- v::headers
-    member this.OnHeadersEnd() = onHeadersEndWasCalled <- true
-    member this.OnBody(v) = body <- v
-    member this.OnHttpMessageEnd() = onMessageEndWasCalled <- true
-    member this.OnError(e) = error <- e
-
 let run p input =
   match run p input with
   | Success(actual,_,_) -> actual
@@ -46,6 +20,9 @@ let runWithHandler p handler input =
   match runParserOnString p handler "test" input with
   | Success(actual,_,_) -> actual
   | Failure(error,_,_) -> failwith error
+
+// Generic object used for "user state"
+let handler = new obj()
 
 [<TestCase(" ", Result=' ')>]
 [<TestCase("\t", Result=' ')>]
@@ -198,30 +175,29 @@ let ``test requestUri does not accept uri fragments``(input) = run httpRequestUr
 [<TestCase("HTTP/11.0", 11, 0)>]
 [<TestCase("HTTP/11.1", 11, 1)>]
 let ``test httpVersion should parse HTTP/major_minor``(input, major, minor) =
-  run httpVersion input |> should equal (HttpVersion(major, minor))
+  run httpVersion input |> should equal (major, minor)
 
 // Test HTTP Request Line parser
 let testHttpRequestLines = [|
-  [| box "GET * HTTP/1.0\r\n"; box (HttpRequestLine(GET, AnyUri, HttpVersion(1,0))) |]
-  [| box "GET * HTTP/1.1\r\n"; box (HttpRequestLine(GET, AnyUri, HttpVersion(1,1))) |]
-  [| box "GET / HTTP/1.1\r\n"; box (HttpRequestLine(GET, RelativeUri([Path "/"; QueryString null; Fragment null]), HttpVersion(1,1))) |]
-  [| box "POST / HTTP/1.1\r\n"; box (HttpRequestLine(POST, RelativeUri([Path "/"; QueryString null; Fragment null]), HttpVersion(1,1))) |]
-  [| box "PATCH / HTTP/1.1\r\n"; box (HttpRequestLine(ExtensionMethod("PATCH"), RelativeUri([Path "/"; QueryString null; Fragment null]), HttpVersion(1,1))) |]
-  [| box "GET /orders HTTP/1.1\r\n"; box (HttpRequestLine(GET, RelativeUri([Path "/orders"; QueryString null; Fragment null]), HttpVersion(1,1))) |]
-  [| box "GET /orders?id=1 HTTP/1.1\r\n"; box (HttpRequestLine(GET, RelativeUri([Path "/orders"; QueryString "id=1"; Fragment null]), HttpVersion(1,1))) |]
-  [| box "GET /orders#last HTTP/1.1\r\n"; box (HttpRequestLine(GET, RelativeUri([Path "/orders"; QueryString null; Fragment "last"]), HttpVersion(1,1))) |]
+  [| box "GET * HTTP/1.0\r\n"; box (GET, AnyUri, (1,0)) |]
+  [| box "GET * HTTP/1.1\r\n"; box (GET, AnyUri, (1,1)) |]
+  [| box "GET / HTTP/1.1\r\n"; box (GET, RelativeUri([Path "/"; QueryString null; Fragment null]), (1,1)) |]
+  [| box "POST / HTTP/1.1\r\n"; box (POST, RelativeUri([Path "/"; QueryString null; Fragment null]), (1,1)) |]
+  [| box "PATCH / HTTP/1.1\r\n"; box (ExtensionMethod("PATCH"), RelativeUri([Path "/"; QueryString null; Fragment null]), (1,1)) |]
+  [| box "GET /orders HTTP/1.1\r\n"; box (GET, RelativeUri([Path "/orders"; QueryString null; Fragment null]), (1,1)) |]
+  [| box "GET /orders?id=1 HTTP/1.1\r\n"; box (GET, RelativeUri([Path "/orders"; QueryString "id=1"; Fragment null]), (1,1)) |]
+  [| box "GET /orders#last HTTP/1.1\r\n"; box (GET, RelativeUri([Path "/orders"; QueryString null; Fragment "last"]), (1,1)) |]
   // Not strictly correct but common from many clients.
-  [| box "GET * HTTP/1.1\r"; box (HttpRequestLine(GET, AnyUri, HttpVersion(1,1))) |]
-  [| box "POST / HTTP/1.1\r"; box (HttpRequestLine(POST, RelativeUri([Path "/"; QueryString null; Fragment null]), HttpVersion(1,1))) |]
-  [| box "PATCH / HTTP/1.1\r"; box (HttpRequestLine(ExtensionMethod("PATCH"), RelativeUri([Path "/"; QueryString null; Fragment null]), HttpVersion(1,1))) |]
-  [| box "GET * HTTP/1.1\n"; box (HttpRequestLine(GET, AnyUri, HttpVersion(1,1))) |]
-  [| box "POST / HTTP/1.1\n"; box (HttpRequestLine(POST, RelativeUri([Path "/"; QueryString null; Fragment null]), HttpVersion(1,1))) |]
-  [| box "PATCH / HTTP/1.1\n"; box (HttpRequestLine(ExtensionMethod("PATCH"), RelativeUri([Path "/"; QueryString null; Fragment null]), HttpVersion(1,1))) |]
+  [| box "GET * HTTP/1.1\r"; box (GET, AnyUri, (1,1)) |]
+  [| box "POST / HTTP/1.1\r"; box (POST, RelativeUri([Path "/"; QueryString null; Fragment null]), (1,1)) |]
+  [| box "PATCH / HTTP/1.1\r"; box (ExtensionMethod("PATCH"), RelativeUri([Path "/"; QueryString null; Fragment null]), (1,1)) |]
+  [| box "GET * HTTP/1.1\n"; box (GET, AnyUri, (1,1)) |]
+  [| box "POST / HTTP/1.1\n"; box (POST, RelativeUri([Path "/"; QueryString null; Fragment null]), (1,1)) |]
+  [| box "PATCH / HTTP/1.1\n"; box (ExtensionMethod("PATCH"), RelativeUri([Path "/"; QueryString null; Fragment null]), (1,1)) |]
 |]
 [<Test>]
 [<TestCaseSource("testHttpRequestLines")>]
 let ``test httpRequestLine should parse an HTTP request line, including the newline``(input, expected:HttpRequestLine) =
-  let handler = TestHandler() :> IHttpMessageParserHandler
   runWithHandler httpRequestLine handler input |> should equal expected
 
 [<TestCase("", ExpectedException=typeof<Exception>)>]
@@ -237,76 +213,72 @@ let ``test httpRequestLine should parse an HTTP request line, including the newl
 [<TestCase("GET HTTP/1.0\r\n", ExpectedException=typeof<Exception>)>]
 [<TestCase("GET HTTP/1.1\r\n", ExpectedException=typeof<Exception>)>]
 let ``test httpRequestLine should not parse invalid HTTP request lines``(input) =
-  let handler = TestHandler() :> IHttpMessageParserHandler
   runWithHandler httpStatusLine handler input |> should equal expected
 
 let testHttpStatusLines = [|
-  [| box "100 Continue\n"; box (HttpStatusLine(100, "Continue")) |]
-  [| box "200 OK\r"; box (HttpStatusLine(200, "OK")) |]
-  [| box "302 Found\r\n"; box (HttpStatusLine(302, "Found")) |]
-  [| box "404 Not Found\r"; box (HttpStatusLine(404, "Not Found")) |]
-  [| box "405 Method Not Allowed\n"; box (HttpStatusLine(405, "Method Not Allowed")) |]
-  [| box "406 Not Acceptable\r\n"; box (HttpStatusLine(406, "Not Acceptable")) |]
+  [| box "100 Continue\n"; box (100, "Continue") |]
+  [| box "200 OK\r"; box (200, "OK") |]
+  [| box "302 Found\r\n"; box (302, "Found") |]
+  [| box "404 Not Found\r"; box (404, "Not Found") |]
+  [| box "405 Method Not Allowed\n"; box (405, "Method Not Allowed") |]
+  [| box "406 Not Acceptable\r\n"; box (406, "Not Acceptable") |]
 |]
 [<Test>]
 [<TestCaseSource("testHttpStatusLines")>]
 let ``test httpStatusLine should parse an HTTP response status line, including the newline``(input, expected:HttpStatusLine) =
-  let handler = TestHandler() :> IHttpMessageParserHandler
   runWithHandler httpStatusLine handler input |> should equal expected
 
 // Test HTTP Request Header parser
 let testHttpHeader = [|
-  [| box "Accept: application/json\r"; box (HttpHeader("Accept", "application/json")) |]
-  [| box "Accept: application/json\n"; box (HttpHeader("Accept", "application/json")) |]
-  [| box "Accept: application/json\r\n"; box (HttpHeader("Accept", "application/json")) |]
+  [| box "Accept: application/json\r"; box (ExtensionHeader("Accept", "application/json")) |]
+  [| box "Accept: application/json\n"; box (ExtensionHeader("Accept", "application/json")) |]
+  [| box "Accept: application/json\r\n"; box (ExtensionHeader("Accept", "application/json")) |]
 |]
 [<Test>]
 [<TestCaseSource("testHttpHeader")>]
 let ``test httpHeader should parse a valid HTTP header, including the newline``(input, expected:HttpHeader) =
-  let handler = TestHandler() :> IHttpMessageParserHandler
   runWithHandler httpHeader handler input |> should equal expected
 
 let date = System.DateTime.UtcNow.ToLongDateString()
 let testHttpHeaders = [|
   [| box ""; box ([]:HttpHeader list) |]
-  [| box "Accept: application/json\r"; box [HttpHeader("Accept", "application/json")] |]
-  [| box "Accept: application/json\n"; box [HttpHeader("Accept", "application/json")] |]
-  [| box "Accept: application/json\r\n"; box [HttpHeader("Accept", "application/json")] |]
-  [| box ("Date: " + date + "\rAccept: application/json\r"); box [HttpHeader("Date", date); HttpHeader("Accept", "application/json")] |]
-  [| box ("Date: " + date + "\nAccept: application/json\n"); box [HttpHeader("Date", date); HttpHeader("Accept", "application/json")] |]
-  [| box ("Date: " + date + "\r\nAccept: application/json\r\n"); box [HttpHeader("Date", date); HttpHeader("Accept", "application/json")] |]
+  [| box "\r\n"; box ([]:HttpHeader list) |]
+  [| box "Accept: application/json\r"; box [ExtensionHeader("Accept", "application/json")] |]
+  [| box "Accept: application/json\n"; box [ExtensionHeader("Accept", "application/json")] |]
+  [| box "Accept: application/json\r\n"; box [ExtensionHeader("Accept", "application/json")] |]
+  [| box ("Date: " + date + "\rAccept: application/json\r"); box [ExtensionHeader("Date", date); ExtensionHeader("Accept", "application/json")] |]
+  [| box ("Date: " + date + "\nAccept: application/json\n"); box [ExtensionHeader("Date", date); ExtensionHeader("Accept", "application/json")] |]
+  [| box ("Date: " + date + "\r\nAccept: application/json\r\n"); box [ExtensionHeader("Date", date); ExtensionHeader("Accept", "application/json")] |]
 |]
 [<Test>]
 [<TestCaseSource("testHttpHeaders")>]
 let ``test httpHeaders should parse a set of valid HTTP headers, including the newline``(input, expected:HttpHeader list) =
-  let handler = TestHandler() :> IHttpMessageParserHandler
-  runWithHandler (many httpHeader) handler input |> should equal expected
+  runWithHandler httpHeaders handler input |> should equal expected
 
 // Test HTTP Request Message parser
 let testHttpRequests = [|
   [|box "GET * HTTP/1.1\r\n\r\n"
-    box (HttpRequestMessage(HttpRequestLine(GET, AnyUri, HttpVersion(1,1)), [], EmptyBody)) |]
+    box ((GET, AnyUri, (1,1)), [], EmptyBody) |]
   [|box "GET * HTTP/1.1\r\nAccept: application/json\r\n\r\n"
-    box (HttpRequestMessage(HttpRequestLine(GET, AnyUri, HttpVersion(1,1)), [HttpHeader("Accept", "application/json")], EmptyBody)) |]
+    box ((GET, AnyUri, (1,1)), [ExtensionHeader("Accept", "application/json")], EmptyBody) |]
   [|box "GET http://localhost/ HTTP/1.1\r\n\r\n"
-    box (HttpRequestMessage(HttpRequestLine(GET, AbsoluteUri [Scheme "http"; Fracture.Http.Uri.Host "localhost"; Path "/"; QueryString null; Fragment null], HttpVersion(1,1)), [], EmptyBody)) |]
+    box ((GET, AbsoluteUri [Scheme "http"; Fracture.Http.Uri.Host "localhost"; Path "/"; QueryString null; Fragment null], (1,1)), [], EmptyBody) |]
   [|box "GET http://localhost/ HTTP/1.1\r\nAccept: application/json\r\n\r\n"
-    box (HttpRequestMessage(HttpRequestLine(GET, AbsoluteUri [Scheme "http"; Fracture.Http.Uri.Host "localhost"; Path "/"; QueryString null; Fragment null], HttpVersion(1,1)), [HttpHeader("Accept", "application/json")], EmptyBody)) |]
+    box ((GET, AbsoluteUri [Scheme "http"; Fracture.Http.Uri.Host "localhost"; Path "/"; QueryString null; Fragment null], (1,1)), [ExtensionHeader("Accept", "application/json")], EmptyBody) |]
   [|box "GET / HTTP/1.1\r\nHost: http://localhost\r\n\r\n"
-    box (HttpRequestMessage(HttpRequestLine(GET, RelativeUri [Path "/"; QueryString null; Fragment null], HttpVersion(1,1)), [HttpHeader("Host", "http://localhost")], EmptyBody)) |]
+    box ((GET, RelativeUri [Path "/"; QueryString null; Fragment null], (1,1)), [ExtensionHeader("Host", "http://localhost")], EmptyBody) |]
   [|box "GET / HTTP/1.1\r\nHost: http://localhost\nAccept: application/json\r\n\r\n"
-    box (HttpRequestMessage(HttpRequestLine(GET, RelativeUri [Path "/"; QueryString null; Fragment null], HttpVersion(1,1)), [HttpHeader("Host", "http://localhost"); HttpHeader("Accept", "application/json")], EmptyBody)) |]
+    box ((GET, RelativeUri [Path "/"; QueryString null; Fragment null], (1,1)), [ExtensionHeader("Host", "http://localhost"); ExtensionHeader("Accept", "application/json")], EmptyBody) |]
   [|box "GET http://192.168.0.1/ HTTP/1.1\r\n\r\n"
-    box (HttpRequestMessage(HttpRequestLine(GET, AbsoluteUri [Scheme "http"; Fracture.Http.Uri.Host "192.168.0.1"; Path "/"; QueryString null; Fragment null], HttpVersion(1,1)), [], EmptyBody)) |]
+    box ((GET, AbsoluteUri [Scheme "http"; Fracture.Http.Uri.Host "192.168.0.1"; Path "/"; QueryString null; Fragment null], (1,1)), [], EmptyBody) |]
   [|box "GET http://192.168.0.1/ HTTP/1.1\r\nAccept: application/json\r\n\r\n"
-    box (HttpRequestMessage(HttpRequestLine(GET, AbsoluteUri [Scheme "http"; Fracture.Http.Uri.Host "192.168.0.1"; Path "/"; QueryString null; Fragment null], HttpVersion(1,1)), [HttpHeader("Accept", "application/json")], EmptyBody)) |]
+    box ((GET, AbsoluteUri [Scheme "http"; Fracture.Http.Uri.Host "192.168.0.1"; Path "/"; QueryString null; Fragment null], (1,1)), [ExtensionHeader("Accept", "application/json")], EmptyBody) |]
   [|box "GET / HTTP/1.1\r\nHost: http://192.168.0.1\r\n\r\n"
-    box (HttpRequestMessage(HttpRequestLine(GET, RelativeUri [Path "/"; QueryString null; Fragment null], HttpVersion(1,1)), [HttpHeader("Host", "http://192.168.0.1")], EmptyBody)) |]
+    box ((GET, RelativeUri [Path "/"; QueryString null; Fragment null], (1,1)), [ExtensionHeader("Host", "http://192.168.0.1")], EmptyBody) |]
   [|box "GET / HTTP/1.1\r\nHost: http://192.168.0.1\nAccept: application/json\r\n\r\n"
-    box (HttpRequestMessage(HttpRequestLine(GET, RelativeUri [Path "/"; QueryString null; Fragment null], HttpVersion(1,1)), [HttpHeader("Host", "http://192.168.0.1"); HttpHeader("Accept", "application/json")], EmptyBody)) |]
+    box ((GET, RelativeUri [Path "/"; QueryString null; Fragment null], (1,1)), [ExtensionHeader("Host", "http://192.168.0.1"); ExtensionHeader("Accept", "application/json")], EmptyBody) |]
 |]
 [<Test>]
 [<TestCaseSource("testHttpRequests")>]
 let ``test httpRequestMessage should parse valid HTTP requests``(input, expected) =
-  let handler = TestHandler() :> IHttpMessageParserHandler
   runWithHandler httpRequestMessage handler input |> should equal expected
