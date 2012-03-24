@@ -78,10 +78,10 @@ let ``test hostport should parse a list of Host and optional Port``(input, expec
   run hostport input |> should equal expected
 
 let ``server cases`` = [|
-//  [| box "wizardsofsmart.net"; box [Host "wizardsofsmart.net"] |]
-//  [| box "wizardsofsmart.net/"; box [Host "wizardsofsmart.net"] |]
-//  [| box "wizardsofsmart.net:80"; box [Host "wizardsofsmart.net"; Port "80"] |]
-//  [| box "wizardsofsmart.net:80/"; box [Host "wizardsofsmart.net"; Port "80"] |]
+  [| box "wizardsofsmart.net"; box [Host "wizardsofsmart.net"] |]
+  [| box "wizardsofsmart.net/"; box [Host "wizardsofsmart.net"] |]
+  [| box "wizardsofsmart.net:80"; box [Host "wizardsofsmart.net"; Port "80"] |]
+  [| box "wizardsofsmart.net:80/"; box [Host "wizardsofsmart.net"; Port "80"] |]
   [| box "ryan@wizardsofsmart.net"; box [UserInfo "ryan"; Host "wizardsofsmart.net"] |]
   [| box "ryan@wizardsofsmart.net/"; box [UserInfo "ryan"; Host "wizardsofsmart.net"] |] 
   [| box "ryan@wizardsofsmart.net:80"; box [UserInfo "ryan"; Host "wizardsofsmart.net"; Port "80"] |]
@@ -107,11 +107,13 @@ let ``uri cases`` = [|
   [| box "http://owin.org/?foo=bar"; box (AbsoluteUri [Scheme "http"; Host "owin.org"; Path "/"; QueryString "foo=bar"; Fragment null]) |]
   [| box "http://owin.org/?foo=1"; box (AbsoluteUri [Scheme "http"; Host "owin.org"; Path "/"; QueryString "foo=1"; Fragment null]) |]
   [| box "http://owin.org/#frag"; box (AbsoluteUri [Scheme "http"; Host "owin.org"; Path "/"; QueryString null; Fragment "frag"]) |]
+  [| box "http://ryan@owin.org/#frag"; box (AbsoluteUri [Scheme "http"; UserInfo "ryan"; Host "owin.org"; Path "/"; QueryString null; Fragment "frag"]) |]
   [| box "http://192.168.0.1"; box (AbsoluteUri [Scheme "http"; Host "192.168.0.1"; Path "/"; QueryString null; Fragment null]) |]
   [| box "http://192.168.0.1/"; box (AbsoluteUri [Scheme "http"; Host "192.168.0.1"; Path "/"; QueryString null; Fragment null]) |]
   [| box "http://192.168.0.1/?foo=bar"; box (AbsoluteUri [Scheme "http"; Host "192.168.0.1"; Path "/"; QueryString "foo=bar"; Fragment null]) |]
   [| box "http://192.168.0.1/?foo=1"; box (AbsoluteUri [Scheme "http"; Host "192.168.0.1"; Path "/"; QueryString "foo=1"; Fragment null]) |]
   [| box "http://192.168.0.1/#frag"; box (AbsoluteUri [Scheme "http"; Host "192.168.0.1"; Path "/"; QueryString null; Fragment "frag"]) |]
+  [| box "http://ryan:passwd@192.168.0.1/#frag"; box (AbsoluteUri [Scheme "http"; UserInfo "ryan:passwd"; Host "192.168.0.1"; Path "/"; QueryString null; Fragment "frag"]) |]
 |]
 [<Test>]
 [<TestCaseSource("uri cases")>]
