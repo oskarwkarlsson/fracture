@@ -88,7 +88,7 @@
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Threading.Tasks.Dataflow">
-      <HintPath>..\..\..\..\Program Files (x86)\Microsoft Corporation\TPL Dataflow\System.Threading.Tasks.Dataflow.dll</HintPath>
+      <HintPath>..\..\lib\System.Threading.Tasks.Dataflow.dll</HintPath>
     </Reference>
     <Reference Include="System.Web.ApplicationServices" />
     <Reference Include="System.Web.Services" />
@@ -98,7 +98,8 @@
     </PreBuildEvent>
   </PropertyGroup>
   <PropertyGroup>
-    <PreBuildEvent>$(SolutionDir).nuget\Nuget.exe install $(ProjectDir)packages.config -o $(SolutionDir)packages</PreBuildEvent>
+    <PreBuildEvent>
+    </PreBuildEvent>
   </PropertyGroup>
   <Import Project="$(SolutionDir)\.nuget\nuget.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

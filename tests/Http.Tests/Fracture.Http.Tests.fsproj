@@ -76,7 +76,8 @@
     </ProjectReference>
   </ItemGroup>
   <PropertyGroup>
-    <PreBuildEvent>$(SolutionDir).nuget\Nuget.exe install $(ProjectDir)packages.config -o $(SolutionDir)packages</PreBuildEvent>
+    <PreBuildEvent>
+    </PreBuildEvent>
   </PropertyGroup>
   <Import Project="$(SolutionDir)\.nuget\nuget.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
