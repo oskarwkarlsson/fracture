@@ -258,11 +258,11 @@ let ``test httpHeaders should parse a set of valid HTTP headers, including the n
 // Test HTTP Request Message parser
 let testHttpRequests = [|
   [|box "GET * HTTP/1.1\r\n\r\n"
-    box ((GET, AnyUri, (1,1)), [], EmptyBody) |]
+    box ((GET, AnyUri, (1,1)), ([]: HttpHeader list), EmptyBody) |]
   [|box "GET * HTTP/1.1\r\nAccept: application/json\r\n\r\n"
     box ((GET, AnyUri, (1,1)), [ExtensionHeader("Accept", "application/json")], EmptyBody) |]
   [|box "GET http://localhost/ HTTP/1.1\r\n\r\n"
-    box ((GET, AbsoluteUri [Scheme "http"; Fracture.Http.Uri.Host "localhost"; Path "/"; QueryString null; Fragment null], (1,1)), [], EmptyBody) |]
+    box ((GET, AbsoluteUri [Scheme "http"; Fracture.Http.Uri.Host "localhost"; Path "/"; QueryString null; Fragment null], (1,1)), ([]: HttpHeader list), EmptyBody) |]
   [|box "GET http://localhost/ HTTP/1.1\r\nAccept: application/json\r\n\r\n"
     box ((GET, AbsoluteUri [Scheme "http"; Fracture.Http.Uri.Host "localhost"; Path "/"; QueryString null; Fragment null], (1,1)), [ExtensionHeader("Accept", "application/json")], EmptyBody) |]
   [|box "GET / HTTP/1.1\r\nHost: http://localhost\r\n\r\n"
@@ -270,7 +270,7 @@ let testHttpRequests = [|
   [|box "GET / HTTP/1.1\r\nHost: http://localhost\nAccept: application/json\r\n\r\n"
     box ((GET, RelativeUri [Path "/"; QueryString null; Fragment null], (1,1)), [ExtensionHeader("Host", "http://localhost"); ExtensionHeader("Accept", "application/json")], EmptyBody) |]
   [|box "GET http://192.168.0.1/ HTTP/1.1\r\n\r\n"
-    box ((GET, AbsoluteUri [Scheme "http"; Fracture.Http.Uri.Host "192.168.0.1"; Path "/"; QueryString null; Fragment null], (1,1)), [], EmptyBody) |]
+    box ((GET, AbsoluteUri [Scheme "http"; Fracture.Http.Uri.Host "192.168.0.1"; Path "/"; QueryString null; Fragment null], (1,1)), ([]: HttpHeader list), EmptyBody) |]
   [|box "GET http://192.168.0.1/ HTTP/1.1\r\nAccept: application/json\r\n\r\n"
     box ((GET, AbsoluteUri [Scheme "http"; Fracture.Http.Uri.Host "192.168.0.1"; Path "/"; QueryString null; Fragment null], (1,1)), [ExtensionHeader("Accept", "application/json")], EmptyBody) |]
   [|box "GET / HTTP/1.1\r\nHost: http://192.168.0.1\r\n\r\n"
