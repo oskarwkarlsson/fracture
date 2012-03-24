@@ -1,4 +1,4 @@
-#I "./packages/FAKE.1.56.7/tools"
+#I "./packages/FAKE.1.64.5/tools"
 #r "FakeLib.dll"
 
 open Fake 
@@ -32,7 +32,7 @@ let fsharpxVersion = GetPackageVersion packagesDir "FSharpx.Core"
 let target = getBuildParamOrDefault "target" "All"
 
 // tools
-let fakePath = "./packages/FAKE.1.56.7/tools"
+let fakePath = "./packages/FAKE.1.64.5/tools"
 let nugetPath = "./.nuget/nuget.exe"
 let nunitPath = "./packages/NUnit.2.5.9.10348/Tools"
 
