@@ -1,7 +1,6 @@
 ﻿namespace Fracture.Http
 
 open System
-open System.Net.Http
 open FSharp.Control
 open FSharp.IO
 open FParsec.CharParsers
