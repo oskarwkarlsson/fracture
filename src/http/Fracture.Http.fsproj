@@ -73,28 +73,12 @@
     <Reference Include="HttpMachine">
       <HintPath>..\..\packages\HttpMachine.0.9.0.0\lib\HttpMachine.dll</HintPath>
     </Reference>
-    <Reference Include="Microsoft.Json">
-      <HintPath>..\..\packages\JsonValue.0.6.0\lib\40\Microsoft.Json.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="Microsoft.Net.Http.Formatting">
-      <HintPath>..\..\packages\HttpClient.0.6.0\lib\40\Microsoft.Net.Http.Formatting.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="Microsoft.Server.Common">
-      <HintPath>..\..\packages\JsonValue.0.6.0\lib\40\Microsoft.Server.Common.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
     <Reference Include="mscorlib" />
     <Reference Include="FSharp.Core">
       <HintPath>..\..\lib\FSharp\v4.0\bin\FSharp.Core.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
-    <Reference Include="System.Net.Http">
-      <HintPath>..\..\packages\HttpClient.0.6.0\lib\40\System.Net.Http.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
     <Reference Include="System.Xml" />
     <Reference Include="System.Xml.Linq" />
   </ItemGroup>
