@@ -69,20 +69,10 @@
     <Compile Include="TcpServer.fs" />
   </ItemGroup>
   <ItemGroup>
-    <Reference Include="FSharpx.Async">
-      <HintPath>..\..\packages\FSharpx.Core.1.4.120204\lib\FSharpx.Async.dll</HintPath>
-    </Reference>
     <Reference Include="FSharpx.Core">
-      <HintPath>..\..\packages\FSharpx.Core.1.4.120204\lib\FSharpx.Core.dll</HintPath>
-      <Private>True</Private>
+      <HintPath>..\..\packages\FSharpx.Core.1.5.49\lib\40\Fsharpx.Core.dll</HintPath>
     </Reference>
-    <Reference Include="FSharpx.Http">
-      <HintPath>..\..\packages\FSharpx.Core.1.4.120204\lib\FSharpx.Http.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="FSharpx.Observable">
-      <HintPath>..\..\packages\FSharpx.Core.1.4.120204\lib\FSharpx.Observable.dll</HintPath>
-    </Reference>
+    <Reference Include="FSharpx.Core" />
     <Reference Include="mscorlib" />
     <Reference Include="FSharp.Core">
       <HintPath>..\..\lib\FSharp\v4.0\bin\FSharp.Core.dll</HintPath>
@@ -92,16 +82,14 @@
     <Reference Include="System.Threading.Tasks.Dataflow">
       <HintPath>..\..\lib\System.Threading.Tasks.Dataflow.dll</HintPath>
     </Reference>
-    <Reference Include="System.Web.ApplicationServices" />
-    <Reference Include="System.Web.Services" />
+    <Reference Include="System.Threading.Tasks.Dataflow" />
   </ItemGroup>
   <PropertyGroup>
     <PreBuildEvent>
     </PreBuildEvent>
   </PropertyGroup>
   <PropertyGroup>
-    <PreBuildEvent>
-    </PreBuildEvent>
+    <PreBuildEvent>$(SolutionDir).nuget\Nuget.exe install $(ProjectDir)packages.config -o $(SolutionDir)packages</PreBuildEvent>
   </PropertyGroup>
   <Import Project="$(SolutionDir)\.nuget\nuget.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
