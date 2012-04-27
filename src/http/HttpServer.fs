@@ -5,6 +5,7 @@ open System
 open System.Collections.Concurrent
 open System.Collections.Generic
 open System.Diagnostics
+open System.IO
 open System.Net
 open System.Net.Http
 open System.Text
@@ -15,28 +16,29 @@ open Fracture.Pipelets
 open Fracture.Http
 open FSharp.IO
 
-type HttpServer(onRequest) = 
+type HttpServer(onRequest) =
     let disposed = ref false
     let parserCache = new ConcurrentDictionary<_,_>()
 
     let onDisconnect endPoint = 
         Console.WriteLine(sprintf "Disconnect from %s" <| endPoint.ToString())
         parserCache.TryRemove(endPoint) 
-        |> fun (removed, parser: HttpParser) -> 
+        |> fun (removed, stream: Stream) -> 
             if removed then
-                parser.Execute(ArraySegment<_>()) |> ignore
+                stream.Write([||], 0, 0) |> ignore
 
     let rec svr = TcpServer.Create(received = onReceive, disconnected = onDisconnect)
 
-    and createParser endPoint = 
+    and createParser endPoint =
         let stream = new CircularStream(4096)
-        let parser = new HttpParser()
-        // Kick off the parser and submit the result to the waiting TcpServer.Send.
-        // Return the stream or even stream.Write/stream.AsyncWrite
-        HttpParser(ParserDelegate(onHeaders = (fun headers -> (Console.WriteLine(sprintf "Headers: %A" headers.Headers))), //NOTE: on ab.exe without the keepalive option only the headers callback fires
-                                  requestBody = (fun body -> (Console.WriteLine(sprintf "Body: %A" body))),
-                                  requestEnded = fun req -> onRequest( req, (svr:TcpServer).Send endPoint req.RequestHeaders.KeepAlive) 
-                   ))
+        let parse stream = Async.FromContinuations(fun (cont, _, _) ->
+            let parser = new HttpParser()
+            let request = parser.Parse(stream)
+            cont request
+        )
+        Async.StartWithContinuations(parse stream, (fun request ->
+            onRequest(request, (svr: TcpServer).Send endPoint (if request.Headers.ConnectionClose.HasValue then not request.Headers.ConnectionClose.Value else false))), ignore, ignore)
+        stream :> Stream
 
     and onReceive (endPoint, data) =
         let parser = parserCache.AddOrUpdate(endPoint, createParser endPoint, fun _ value -> value)
