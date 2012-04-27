@@ -13,6 +13,19 @@ open FSharp.IO
 open NUnit.Framework
 open Swensen.Unquote.Assertions
 
+[<Test>]
+let ``test performance of 100k parses``() =
+  let message = "GET http://wizardsofsmart.net/foo HTTP/1.1\r\n\r\n"B
+  let parser = new HttpParser()
+  let timer = System.Diagnostics.Stopwatch.StartNew()
+  for x = 1 to 100000 do
+    use stream = new MemoryStream(message, false)
+    let request = parser.Parse(stream)
+    request.Dispose()
+  timer.Stop()
+  Console.WriteLine("Parsed 100k GET requests in {0} ms.", timer.ElapsedMilliseconds)
+  test <@ timer.ElapsedMilliseconds < 350L @>
+
 type TestRequest = {
     Name: string
     Raw: byte[]
@@ -29,7 +42,6 @@ type TestRequest = {
     ShouldFail: bool }
     with
     override x.ToString() = x.Name
-
 
 [<Test>]
 [<TestCaseSource("requests")>]
