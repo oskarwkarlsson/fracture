@@ -19,7 +19,6 @@ type HttpParser() =
     request.Version <- Version.Parse(arr.[2].TrimStart("HTP/".ToCharArray()))
 
   static member private ParseHeader (header: string, request: HttpRequestMessage) =
-    Console.WriteLine("Reading header: " + header)
     let name, value =
       let pair = header.Split([|':'|], 2) in
       pair.[0], pair.[1].TrimStart(' ')
@@ -39,6 +38,7 @@ type HttpParser() =
     // setting this here allows us to add headers later.
     let request = new HttpRequestMessage(Content = new StreamContent(stream))
 
+    // TODO: Replace StreamReader with a more efficient version
     use reader = new StreamReader(stream)
 
     // read the request line
