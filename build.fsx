@@ -24,8 +24,8 @@ let nugetDir = "./nuget/"
 let targetPlatformDir = getTargetPlatformDir "4.0.30319"
 let nugetLibDir = nugetDir @@ "lib"
 let nugetDocsDir = nugetDir @@ "docs"
-let fparsecVersion = GetPackageVersion packagesDir "FParsec"
 let fsharpxVersion = GetPackageVersion packagesDir "FSharpx.Core"
+let httpVersion = GetPackageVersion packagesDir "System.Net.Http"
 
 // params
 let target = getBuildParamOrDefault "target" "All"
@@ -129,7 +129,7 @@ Target "BuildNuGet" (fun _ ->
             Description = projectDescription
             Version = version
             OutputPath = nugetDir
-            Dependencies = ["FParsec",RequireExactly fparsecVersion;"FSharpx.Core",RequireExactly fsharpxVersion]
+            Dependencies = ["System.Net.Http",RequireExactly httpVersion;"FSharpx.Core",RequireExactly fsharpxVersion]
             AccessKey = nugetKey
             ToolPath = nugetPath
             Publish = nugetKey <> "" })
@@ -160,4 +160,3 @@ Target "All" DoNothing
 
 // Start build
 Run target
-
