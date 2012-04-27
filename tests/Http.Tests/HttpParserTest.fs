@@ -1,8 +1,17 @@
-﻿module Fracture.Http.Tests.HttpTestRequests
+﻿module Fracture.Http.Tests.HttpParserTest
 
 open System
 open System.Collections.Generic
+open System.IO
+open System.Net.Http
 open System.Text
+open Fracture
+open Fracture.Http
+open Fracture.Pipelets
+open FSharp.Control
+open FSharp.IO
+open NUnit.Framework
+open Swensen.Unquote.Assertions
 
 type TestRequest = {
     Name: string
@@ -17,59 +26,120 @@ type TestRequest = {
     Headers: IDictionary<string, string>
     Body: byte[] 
     ShouldKeepAlive: bool // if the message is 1.1 and !Connection:close or message is < 1.1 and Connection:keep-alive
-    OnHeadersEndCalled: bool }
+    ShouldFail: bool }
+    with
+    override x.ToString() = x.Name
+
+
+[<Test>]
+[<TestCaseSource("requests")>]
+let ``test parser correctly parses the request``(testRequest: TestRequest) =
+  let parser = new HttpParser()
+
+  use stream = new MemoryStream(testRequest.Raw)
+  try
+    use request = parser.Parse(stream)
+    test <@ request <> null @>
+    test <@ request.Method.Method.Equals(testRequest.Method, StringComparison.InvariantCultureIgnoreCase) @>
+    test <@ request.RequestUri.AbsoluteUri = testRequest.RequestUri @>
+    test <@ request.RequestUri.AbsolutePath = testRequest.RequestPath @>
+    test <@ request.RequestUri.Query = testRequest.QueryString @>
+    test <@ request.RequestUri.Fragment = testRequest.Fragment @>
+    test <@ (request.Headers |> Seq.length) = (testRequest.Headers |> Seq.length) @>
+  with e -> test <@ testRequest.ShouldFail @>
+
+////  use stream = new CircularStream(20)
+////
+////  // simulate an asynchronous socket connection pumping data into the CircularStream
+////  let source = asyncSeq {
+////    yield "GET / HTTP"B
+////    yield "/1.1\r\nHost:"B
+////    yield " wizardsof"B
+////    yield "smart.net\r"B
+////    yield "\n\r\n"B
+////  }
+////
+////  // Start pumping data into the stream.
+////  // This should block and require the parser to consume before continuing.
+////  stream.AsyncWriteSeq(source) |> Async.Start
 
 let requests = [|
-  { Name = "No headers no body"
-    Raw = "\r\nGET /foo HTTP/1.1\r\n\r\n"B
+  { Name = "No headers no body absolute uri"
+    Raw = "GET http://wizardsofsmart.net/foo HTTP/1.1\r\n\r\n"B
     Method = "GET"
-    RequestUri = "/foo"
+    RequestUri = "http://wizardsofsmart.net/foo"
     RequestPath = "/foo"
-    QueryString = null
-    Fragment = null
+    QueryString = ""
+    Fragment = ""
     VersionMajor = 1
     VersionMinor = 1
     Headers = dict Seq.empty
-    OnHeadersEndCalled = false
+    ShouldFail = false
     Body = null
     ShouldKeepAlive = true }
-  { Name = "No headers no body no version"
-    Raw = "GET /foo\r\n\r\n"B
+  { Name = "Host header no body relative uri"
+    Raw = "GET /foo HTTP/1.1\r\nHost: wizardsofsmart.net\r\n\r\n"B
+    Method = "GET"
+    RequestUri = "http://wizardsofsmart.net/foo"
+    RequestPath = "/foo"
+    QueryString = ""
+    Fragment = ""
+    VersionMajor = 1
+    VersionMinor = 1
+    Headers = dict [("Host", "wizardsofsmart.net")]
+    ShouldFail = false
+    Body = null
+    ShouldKeepAlive = true }
+  { Name = "Host header no body no version"
+    Raw = "GET /foo\r\nHost: wizardsofsmart.net\r\n\r\n"B
+    Method = "GET"
+    RequestUri = "http://wizardsofsmart.net/foo"
+    RequestPath = "/foo"
+    QueryString = ""
+    Fragment = ""
+    VersionMajor = 0
+    VersionMinor = 9
+    Headers = dict [("Host", "wizardsofsmart.net")]
+    ShouldFail = true // missing version
+    Body = null
+    ShouldKeepAlive = false }
+  { Name = "No headers no body"
+    Raw = "GET /foo HTTP/1.1\r\n\r\n"B
     Method = "GET"
     RequestUri = "/foo"
     RequestPath = "/foo"
-    QueryString = null
-    Fragment = null
+    QueryString = ""
+    Fragment = ""
     VersionMajor = 0
     VersionMinor = 9
     Headers = dict Seq.empty
-    OnHeadersEndCalled = false
+    ShouldFail = true // missing Host header for relative URI
     Body = null
     ShouldKeepAlive = false }
   { Name = "no body"
-    Raw = "GET /foo HTTP/1.1\r\nFoo: Bar\r\n\r\n"B
+    Raw = "GET /foo HTTP/1.1\r\nHost: wizardsofsmart.net\r\nFoo: Bar\r\n\r\n"B
     Method = "GET"
-    RequestUri = "/foo"
+    RequestUri = "http://wizardsofsmart.net/foo"
     RequestPath = "/foo"
-    QueryString = null
-    Fragment = null
+    QueryString = ""
+    Fragment = ""
     VersionMajor = 1
     VersionMinor = 1
-    Headers = dict [( "Foo", "Bar" )]
-    OnHeadersEndCalled = false
+    Headers = dict [("Host", "wizardsofsmart.net"); ("Foo", "Bar" )]
+    ShouldFail = false
     Body = null
     ShouldKeepAlive = true }
-  { Name = "no body no version"
-    Raw = "GET /foo\r\nFoo: Bar\r\n\r\n"B
+  { Name = "headers no body no version"
+    Raw = "GET /foo\r\nHost: wizardsofsmart.net\r\nFoo: Bar\r\n\r\n"B
     Method = "GET"
     RequestUri = "/foo"
     RequestPath = "/foo"
-    QueryString = null
-    Fragment = null
+    QueryString = ""
+    Fragment = ""
     VersionMajor = 0
     VersionMinor = 9
-    Headers = dict [("Foo", "Bar" )]
-    OnHeadersEndCalled = false
+    Headers = dict [("Host", "wizardsofsmart.net"); ("Foo", "Bar" )]
+    ShouldFail = true // missing version
     Body = null
     ShouldKeepAlive = false }
   { Name = "query string"
@@ -78,11 +148,11 @@ let requests = [|
     RequestUri = "/foo?asdf=jklol"
     RequestPath = "/foo"
     QueryString = "asdf=jklol"
-    Fragment = null
+    Fragment = ""
     VersionMajor = 1
     VersionMinor = 1
     Headers = dict [( "Foo", "Bar" ); ( "Baz-arse", "Quux" )]
-    OnHeadersEndCalled = false
+    ShouldFail = false
     Body = null
     ShouldKeepAlive = true }
   { Name = "fragment"
@@ -95,7 +165,7 @@ let requests = [|
     VersionMajor = 1
     VersionMinor = 1
     Headers = dict [( "Foo", "Bar" ); ( "Baz", "Quux" )]
-    OnHeadersEndCalled = false
+    ShouldFail = false
     Body = null
     ShouldKeepAlive = true }
   { Name = "zero content length"
@@ -103,12 +173,12 @@ let requests = [|
     Method = "POST"
     RequestUri = "/foo"
     RequestPath = "/foo"
-    QueryString = null
-    Fragment = null
+    QueryString = ""
+    Fragment = ""
     VersionMajor = 1
     VersionMinor = 1
     Headers = dict [( "Foo", "Bar" ); ( "Content-Length", "0" )]
-    OnHeadersEndCalled = false
+    ShouldFail = false
     Body = null
     ShouldKeepAlive = true }
   { Name = "some content length"
@@ -116,12 +186,12 @@ let requests = [|
     Method = "POST"
     RequestUri = "/foo"
     RequestPath = "/foo"
-    QueryString = null
-    Fragment = null
+    QueryString = ""
+    Fragment = ""
     VersionMajor = 1
     VersionMinor = 1
     Headers = dict [( "Foo", "Bar" ); ( "Content-Length", "5" )]
-    OnHeadersEndCalled = false
+    ShouldFail = false
     Body = Encoding.UTF8.GetBytes("hello")
     ShouldKeepAlive = true }
   { Name = "1.1 get"
@@ -129,12 +199,12 @@ let requests = [|
     Method = "GET"
     RequestUri = "/foo"
     RequestPath = "/foo"
-    QueryString = null
-    Fragment = null
+    QueryString = ""
+    Fragment = ""
     VersionMajor = 1
     VersionMinor = 1
     Headers = dict [( "Foo", "Bar" ); ( "Connection", "keep-alive" )]
-    OnHeadersEndCalled = false
+    ShouldFail = false
     Body = null
     ShouldKeepAlive = true }
   { Name = "1.1 get close"
@@ -142,12 +212,12 @@ let requests = [|
     Method = "GET"
     RequestUri = "/foo"
     RequestPath = "/foo"
-    QueryString = null
-    Fragment = null
+    QueryString = ""
+    Fragment = ""
     VersionMajor = 1
     VersionMinor = 1
     Headers = dict [( "Foo", "Bar" ); ( "CoNNection", "CLOSE" )]
-    OnHeadersEndCalled = false
+    ShouldFail = false
     Body = null
     ShouldKeepAlive = false }
   { Name = "1.1 post"
@@ -155,12 +225,12 @@ let requests = [|
     Method = "POST"
     RequestUri = "/foo"
     RequestPath = "/foo"
-    QueryString = null
-    Fragment = null
+    QueryString = ""
+    Fragment = ""
     VersionMajor = 1
     VersionMinor = 1
     Headers = dict [( "Foo", "Bar" ); ( "Content-Length", "15" )]
-    OnHeadersEndCalled = false
+    ShouldFail = false
     Body = Encoding.UTF8.GetBytes("helloworldhello")
     ShouldKeepAlive = true }
   { Name = "1.1 post close"
@@ -168,12 +238,12 @@ let requests = [|
     Method = "POST"
     RequestUri = "/foo"
     RequestPath = "/foo"
-    QueryString = null
-    Fragment = null
+    QueryString = ""
+    Fragment = ""
     VersionMajor = 1
     VersionMinor = 1
     Headers = dict [( "Foo", "Bar" ); ( "Content-Length", "15" ); ( "Connection", "close" ); ( "Baz", "Quux" )]
-    OnHeadersEndCalled = false
+    ShouldFail = false
     Body = Encoding.UTF8.GetBytes("helloworldhello")
     ShouldKeepAlive = false }
   // because it has no content-length it's not keep alive anyway? TODO 
@@ -187,7 +257,7 @@ let requests = [|
     VersionMajor = 1
     VersionMinor = 1
     Headers = dict [( "Foo", "Bar" ); ( "Baz", "Quux" ); ( "Connection", "close" )]
-    OnHeadersEndCalled = false
+    ShouldFail = false
     Body = null
     ShouldKeepAlive = false }
   { Name = "1.0 get"
@@ -200,7 +270,7 @@ let requests = [|
     VersionMajor = 1
     VersionMinor = 0
     Headers = dict [( "Foo", "Bar" ); ( "Baz", "Quux" )]
-    OnHeadersEndCalled = false
+    ShouldFail = false
     Body = null
     ShouldKeepAlive = false }
   { Name = "1.0 get keep-alive"
@@ -213,7 +283,7 @@ let requests = [|
     VersionMajor = 1
     VersionMinor = 0
     Headers = dict [( "Foo", "Bar" ); ( "Baz", "Quux" ); ( "Connection", "keep-alive" )]
-    OnHeadersEndCalled = false
+    ShouldFail = false
     Body = null
     ShouldKeepAlive = true }
   { Name = "1.0 post"
@@ -221,12 +291,12 @@ let requests = [|
     Method = "POST"
     RequestUri = "/foo"
     RequestPath = "/foo"
-    QueryString = null
-    Fragment = null
+    QueryString = ""
+    Fragment = ""
     VersionMajor = 1
     VersionMinor = 0
     Headers = dict [( "Foo", "Bar" )]
-    OnHeadersEndCalled = false
+    ShouldFail = false
     Body = Encoding.UTF8.GetBytes("helloworldhello")
     ShouldKeepAlive = false }
   { Name = "1.0 post keep-alive with content length"
@@ -234,12 +304,12 @@ let requests = [|
     Method = "POST"
     RequestUri = "/foo"
     RequestPath = "/foo"
-    QueryString = null
-    Fragment = null
+    QueryString = ""
+    Fragment = ""
     VersionMajor = 1
     VersionMinor = 0
     Headers = dict [( "Foo", "Bar" ); ( "Connection", "keep-alive" ); ( "Content-Length", "15" )]
-    OnHeadersEndCalled = false
+    ShouldFail = false
     Body = Encoding.UTF8.GetBytes("helloworldhello")
     ShouldKeepAlive = true }
 |]
