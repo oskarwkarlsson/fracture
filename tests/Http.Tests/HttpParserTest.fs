@@ -26,6 +26,18 @@ let ``test performance of 100k parses``() =
   Console.WriteLine("Parsed 100k GET requests in {0} ms.", timer.ElapsedMilliseconds)
   test <@ timer.ElapsedMilliseconds < 350L @>
 
+[<Test>]
+let ``test performance of 100k parses with HttpMachine``() =
+  let message = "GET http://wizardsofsmart.net/foo HTTP/1.1\r\n\r\n"B
+  let handler = Fracture.Http.Core.ParserDelegate(ignore, ignore, ignore)
+  let parser = new HttpMachine.HttpParser(handler)
+  let timer = System.Diagnostics.Stopwatch.StartNew()
+  for x = 1 to 100000 do
+    parser.Execute(ArraySegment<_>(message)) |> ignore
+  timer.Stop()
+  Console.WriteLine("Parsed 100k GET requests in {0} ms.", timer.ElapsedMilliseconds)
+  test <@ timer.ElapsedMilliseconds < 500L @>
+
 type TestRequest = {
     Name: string
     Raw: byte[]
