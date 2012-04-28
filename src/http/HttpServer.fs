@@ -1,4 +1,5 @@
 ﻿module Fracture.HttpServer
+#nowarn "40"
 
 open System
 open System.Collections.Concurrent
@@ -33,17 +34,19 @@ type HttpServer(onRequest) =
         let parse stream = Async.FromContinuations(fun (cont, _, _) ->
             let parser = new HttpParser()
             let request = parser.Parse(stream)
-            cont request
-        )
-        Async.StartWithContinuations(parse stream, (fun request ->
-            onRequest(request, (svr: TcpServer).Send endPoint (if request.Headers.ConnectionClose.HasValue then not request.Headers.ConnectionClose.Value else false))), ignore, ignore)
-        stream :> Stream
+            cont request )
+        async {
+            use! request = parse stream
+            onRequest(request, (svr: TcpServer).Send endPoint (if request.Headers.ConnectionClose.HasValue then not request.Headers.ConnectionClose.Value else false)) }
+        |> Async.Start
+        stream
 
-    and onReceive: Func<_,_> = 
-        Func<_,_>( fun (endPoint, data) -> Task.Factory.StartNew(fun () ->
-            parserCache.AddOrUpdate(endPoint, createParser endPoint, fun _ value -> value )
-            |> fun (stream: Stream) ->
-                stream.Write(data, 0, data.Length) |> ignore))
+    and onReceive: Func<_,_> =
+        let task (endPoint, data) = async {
+            let stream = parserCache.AddOrUpdate(endPoint, createParser endPoint, fun _ value -> value) in
+            do! stream.AsyncWrite(data)
+        }
+        Func<_,_>(fun args -> task args |> Async.StartAsTask :> Task)
         
     member h.Start(port) = svr.Listen(IPAddress.Loopback, port)
 
