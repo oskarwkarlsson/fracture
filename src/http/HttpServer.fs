@@ -34,11 +34,12 @@ type HttpServer(onRequest) =
         let parse stream = Async.FromContinuations(fun (cont, _, _) ->
             let parser = new HttpParser()
             let request = parser.Parse(stream)
-            cont request
-        )
-        Async.StartWithContinuations(parse stream, (fun request ->
-            onRequest(request, (svr: TcpServer).Send endPoint (if request.Headers.ConnectionClose.HasValue then not request.Headers.ConnectionClose.Value else false))), ignore, ignore)
-        stream :> Stream
+            cont request )
+        async {
+            use! request = parse stream
+            onRequest(request, (svr: TcpServer).Send endPoint (if request.Headers.ConnectionClose.HasValue then not request.Headers.ConnectionClose.Value else false)) }
+        |> Async.Start
+        stream
 
     and onReceive (endPoint, data) =
         let parser = parserCache.AddOrUpdate(endPoint, createParser endPoint, fun _ value -> value)
