@@ -31,12 +31,9 @@ type HttpServer(onRequest) =
 
     and createParser endPoint =
         let stream = new CircularStream(4096)
-        let parse stream = Async.FromContinuations(fun (cont, _, _) ->
-            let parser = new HttpParser()
-            let request = parser.Parse(stream)
-            cont request )
+        let parser = new HttpParser()
         async {
-            use! request = parse stream
+            use! request = parser.Parse stream
             onRequest(request, (svr: TcpServer).Send endPoint (if request.Headers.ConnectionClose.HasValue then not request.Headers.ConnectionClose.Value else false)) }
         |> Async.Start
         stream

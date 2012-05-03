@@ -4,33 +4,39 @@ open System
 open System.Diagnostics.Contracts
 open System.IO
 open System.Net.Http
+open System.Text
 open FSharpx
 
 type HttpParser() =
 
     static let contentHeaders = [|"Allow";"Content-Encoding";"Content-Language";"Content-Length";"Content-Location";"Content-MD5";"Content-Range";"Content-Type";"Expires";"Last-Modified"|]
 
-    member x.Parse(stream: Stream) =
+    member x.Parse(stream: Stream) = async {
         Contract.Requires(stream <> null)
         let request = new HttpRequestMessage(Content = new StreamContent(stream))
-        use reader = new StreamReader(stream)
-        HttpParser.ParseRequestLine(reader, request)
-        HttpParser.ParseHeaders(reader, request)
-        request
+        use reader = new AsyncStreamReader(stream, Encoding.ASCII, false, 4096)
+        do! HttpParser.ParseRequestLine(reader, request)
+        do! HttpParser.ParseHeaders(reader, request)
+        return request
+    }
 
-    static member private ParseRequestLine (reader: TextReader, request: HttpRequestMessage) =
-        let requestLine = reader.ReadLine()
+    static member private ParseRequestLine (reader: AsyncStreamReader, request: HttpRequestMessage) = async {
+        let! requestLine = reader.ReadLine()
         let arr = requestLine.Split([|' '|], 3)
         request.Method <- HttpMethod(arr.[0])
         let uri = arr.[1] in
         request.RequestUri <- Uri(uri, if uri.StartsWith("/") then UriKind.Relative else UriKind.Absolute)
         request.Version <- Version.Parse(arr.[2].TrimStart("HTP/".ToCharArray()))
+    }
 
-    static member private ParseHeaders (reader: TextReader, request) =
-        let mutable line = reader.ReadLine() 
-        while not <| String.IsNullOrEmpty(line) do
+    static member private ParseHeaders (reader: AsyncStreamReader, request) =
+        let rec loop () = async {
+            let! line = reader.ReadLine()
+            if String.IsNullOrEmpty(line) then () else
             HttpParser.ParseHeader(line, request)
-            line <- reader.ReadLine()
+            return! loop ()
+        }
+        loop ()
 
     static member private ParseHeader (header: string, request: HttpRequestMessage) =
         let name, value =
