@@ -38,8 +38,12 @@ type HttpParser() =
             pair.[0], pair.[1].TrimStart(' ')
         match name, value with
         | "Host" as h, v ->
-            request.RequestUri <- Uri(Uri("http://" + v), request.RequestUri)
             request.Headers.Host <- v
+            // A Host header is required. This can be used to fill in the RequestUri if a fully qualified URI was not provided.
+            // However, we don't want to replace the URI if a fully qualified URI was provided, as it may have used a different protocol, e.g. https.
+            // Also note that we don't fail hard if a Host was not provided. This may need to change.
+            if not request.RequestUri.IsAbsoluteUri then
+                request.RequestUri <- Uri(Uri("http://" + v), request.RequestUri)
         | h, v when h |> HttpParser.IsContentHeader ->
             request.Content.Headers.Add(h, v)
         | _ -> request.Headers.Add(name, value)
