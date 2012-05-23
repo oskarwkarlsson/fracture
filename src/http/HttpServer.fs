@@ -3,9 +3,7 @@
 
 open System
 open System.Collections.Concurrent
-open System.Collections.Generic
 open System.Diagnostics
-open System.IO
 open System.Net
 open System.Net.Http
 open System.Text
@@ -14,6 +12,7 @@ open Fracture
 open Fracture.Common
 open Fracture.Pipelets
 open Fracture.Http
+open FSharp.Control
 open FSharp.IO
 
 type HttpServer(onRequest) =
@@ -23,30 +22,29 @@ type HttpServer(onRequest) =
     let onDisconnect endPoint = 
         Console.WriteLine(sprintf "Disconnect from %s" <| endPoint.ToString())
         parserCache.TryRemove(endPoint) 
-        |> fun (removed, stream: Stream) -> 
+        |> fun (removed, parser: HttpParser) -> 
             if removed then
-                stream.Write([||], 0, 0) |> ignore
+                parser.Post(ArraySegment<byte>()) |> ignore
 
     let rec svr = TcpServer.Create(received = onReceive, disconnected = onDisconnect)
 
     and createParser endPoint =
-        let stream = new CircularStream(4096)
-        let parser = new HttpParser()
-        async {
-            use! request = parser.Parse stream
-            onRequest(request, (svr: TcpServer).Send endPoint (if request.Headers.ConnectionClose.HasValue then not request.Headers.ConnectionClose.Value else false)) }
-        |> Async.Start
-        stream
+        HttpParser (fun request ->
+            let keepAlive =
+                if request.Headers.ConnectionClose.HasValue then
+                    not request.Headers.ConnectionClose.Value
+                else false
+            onRequest(request, svr.Send endPoint keepAlive))
 
     and onReceive (endPoint, data) =
         let parser = parserCache.AddOrUpdate(endPoint, createParser endPoint, fun _ value -> value)
-        parser.Execute( ArraySegment(data) ) |> ignore
-    
+        parser.Post <| ArraySegment<_>(data)
+
     //ensures the listening socket is shutdown on disposal.
     member private this.Dispose(disposing) = 
         if not !disposed then
             if disposing && svr <> Unchecked.defaultof<TcpServer> then
-                (svr :> IDisposable).Dispose()
+                svr.Dispose()
             disposed := true
         
     member this.Start(port) = svr.Listen(IPAddress.Loopback, port)

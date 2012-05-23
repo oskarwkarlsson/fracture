@@ -16,18 +16,10 @@ open Swensen.Unquote.Assertions
 [<Test>]
 let ``test performance of 100k parses``() =
   let message = "GET http://wizardsofsmart.net/foo HTTP/1.1\r\n\r\n"B
-  let parser = new HttpParser()
   let timer = System.Diagnostics.Stopwatch.StartNew()
-  [| for x = 1 to 100000 do
-        yield async {
-          use stream = new MemoryStream(message, false)
-          let! request = parser.Parse(stream)
-          request.Dispose()
-        }
-  |]
-  |> Async.Parallel
-  |> Async.RunSynchronously
-  |> ignore
+  let parser = new HttpParser(ignore)
+  for x = 1 to 100000 do
+    parser.Post(ArraySegment(message))
   timer.Stop()
   Console.WriteLine("Parsed 100k GET requests in {0} ms.", timer.ElapsedMilliseconds)
   test <@ timer.ElapsedMilliseconds < 350L @>
@@ -64,21 +56,20 @@ type TestRequest = {
 [<Test>]
 [<TestCaseSource("requests")>]
 let ``test parser correctly parses the request``(testRequest: TestRequest) =
-  let parser = new HttpParser()
-
   use stream = new MemoryStream(testRequest.Raw)
-  async {
+  let parser = HttpParser(fun request ->
     try
-      use! request = parser.Parse(stream)
-      test <@ request <> null @>
-      test <@ request.Method.Method.Equals(testRequest.Method, StringComparison.InvariantCultureIgnoreCase) @>
-      test <@ request.RequestUri.AbsoluteUri = testRequest.RequestUri @>
-      test <@ request.RequestUri.AbsolutePath = testRequest.RequestPath @>
-      test <@ request.RequestUri.Query = testRequest.QueryString @>
-      test <@ request.RequestUri.Fragment = testRequest.Fragment @>
-      test <@ (request.Headers |> Seq.length) = (testRequest.Headers |> Seq.length) @>
-    with e -> test <@ testRequest.ShouldFail @>
-  } |> Async.RunSynchronously
+      try
+        test <@ request <> null @>
+        test <@ request.Method.Method.Equals(testRequest.Method, StringComparison.InvariantCultureIgnoreCase) @>
+        test <@ request.RequestUri.AbsoluteUri = testRequest.RequestUri @>
+        test <@ request.RequestUri.AbsolutePath = testRequest.RequestPath @>
+        test <@ request.RequestUri.Query = testRequest.QueryString @>
+        test <@ request.RequestUri.Fragment = testRequest.Fragment @>
+        test <@ (request.Headers |> Seq.length) = (testRequest.Headers |> Seq.length) @>
+      with e -> test <@ testRequest.ShouldFail @>
+    finally request.Dispose())
+  parser.Post(ArraySegment(testRequest.Raw))
 
 ////  use stream = new CircularStream(20)
 ////

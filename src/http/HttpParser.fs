@@ -5,38 +5,86 @@ open System.Diagnostics.Contracts
 open System.IO
 open System.Net.Http
 open System.Text
+open FSharp.Control
+open FSharp.IO
 open FSharpx
 
-type HttpParser() =
+type private ParserState =
+  | StartLine
+  | Headers
+  | Body
 
-    static let contentHeaders = [|"Allow";"Content-Encoding";"Content-Language";"Content-Length";"Content-Location";"Content-MD5";"Content-Range";"Content-Type";"Expires";"Last-Modified"|]
+type HttpParser(cont) =
 
-    member x.Parse(stream: Stream) = async {
-        Contract.Requires(stream <> null)
-        let request = new HttpRequestMessage(Content = new StreamContent(stream))
-        use reader = new AsyncStreamReader(stream, Encoding.ASCII, false, 4096)
-        do! HttpParser.ParseRequestLine(reader, request)
-        do! HttpParser.ParseHeaders(reader, request)
-        return request
-    }
+    static let contentHeaders = [|
+      "Allow"
+      "Content-Encoding"
+      "Content-Language"
+      "Content-Length"
+      "Content-Location"
+      "Content-MD5"
+      "Content-Range"
+      "Content-Type"
+      "Expires"
+      "Last-Modified"
+    |]
 
-    static member private ParseRequestLine (reader: AsyncStreamReader, request: HttpRequestMessage) = async {
-        let! requestLine = reader.ReadLine()
+    let agent = Agent.Start(fun inbox ->
+        let stream : MemoryStream ref = ref null
+
+        let updateRequest (sb: byte list) state request =
+            let block = sb |> List.rev |> List.toArray
+            match state with
+            | StartLine ->
+                let line = Encoding.ASCII.GetString(block)
+                HttpParser.ParseRequestLine(line, request)
+                Headers
+            | Headers ->
+                if Array.length block = 0 then Body else
+                let line = Encoding.ASCII.GetString(block)
+                HttpParser.ParseHeader(line, request)
+                Headers
+            | Body ->
+                if request.Content = null then
+                    stream := new MemoryStream()
+                    request.Content <- new StreamContent(!stream)
+                stream.Value.Write(block, 0, block.Length)
+                Body
+
+        let rec step acc state request = async {
+            let! (chunk: ArraySegment<byte>) = inbox.Receive()
+            if chunk.Count > 0 then
+                let rec loop sb i state =
+                    if i = chunk.Count then sb, state else
+                    let c = chunk.Array.[i + chunk.Offset]
+                    if c = '\r'B then
+                        let state' = updateRequest sb state request
+                        let j = i + 1
+                        if j < chunk.Count && chunk.Array.[j + chunk.Offset] = '\n'B then
+                            loop [] (j + 1) state'
+                        else loop [] j state'
+                    elif c = '\n'B then
+                        let state' = updateRequest sb state request
+                        loop [] (i + 1) state'
+                    else
+                        loop (c :: sb) (i + 1) state
+                let acc', state' = loop [] 0 state
+                return! step acc' state' request
+            else
+                updateRequest acc state request |> ignore
+                cont request
+                stream := null
+                return! step [] StartLine <| new HttpRequestMessage() }
+        step [] StartLine <| new HttpRequestMessage() )
+
+    member x.Post(data) = agent.Post data
+
+    static member private ParseRequestLine (requestLine: string, request: HttpRequestMessage) =
         let arr = requestLine.Split([|' '|], 3)
         request.Method <- HttpMethod(arr.[0])
         let uri = arr.[1] in
         request.RequestUri <- Uri(uri, if uri.StartsWith("/") then UriKind.Relative else UriKind.Absolute)
         request.Version <- Version.Parse(arr.[2].TrimStart("HTP/".ToCharArray()))
-    }
-
-    static member private ParseHeaders (reader: AsyncStreamReader, request) =
-        let rec loop () = async {
-            let! line = reader.ReadLine()
-            if String.IsNullOrEmpty(line) then () else
-            HttpParser.ParseHeader(line, request)
-            return! loop ()
-        }
-        loop ()
 
     static member private ParseHeader (header: string, request: HttpRequestMessage) =
         let name, value =
