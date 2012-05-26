@@ -8,8 +8,9 @@ open System.Collections.Generic
 open System.Collections.Concurrent
 open Fracture.SocketExtensions
 open Fracture.Pipelets
-open System.Threading.Tasks.Dataflow
 open System.Threading
+open System.Threading.Tasks
+open System.Threading.Tasks.Dataflow
 open Fracture.Common
 open Fracture.Threading
 
@@ -22,7 +23,8 @@ type TcpServer(poolSize, perOperationBufferSize, acceptBacklogCount, received, ?
     let listeningSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)
     let mutable disposed = false
     let errors (msg:string) = Console.WriteLine(msg)
-    let receiveAction = new ActionBlock<_>(received)
+    let receiveAction = new ActionBlock<_>(fun args ->
+        Task.Factory.StartNew(Action(fun () -> received args)))
 
     /// Ensures the listening socket is shutdown on disposal.
     let cleanUp disposing = 

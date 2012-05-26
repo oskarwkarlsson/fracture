@@ -1,4 +1,5 @@
 ﻿module Fracture.HttpServer
+#nowarn "40"
 
 open System
 open System.Text
@@ -31,12 +32,9 @@ type HttpServer(onRequest) as this =
                                   requestEnded = fun req -> onRequest( req, (svr:TcpServer).Send endPoint req.RequestHeaders.KeepAlive) 
                    ))
 
-    and onReceive: Func<_,_> = 
-        Func<_,_>( fun (endPoint, data) -> Task.Factory.StartNew(fun () ->
-        parserCache.AddOrUpdate(endPoint, createParser endPoint, fun _ value -> value )
-        |> fun parser -> parser.Execute( ArraySegment(data) ) |> ignore))
-
-    
+    and onReceive (endPoint, data) =
+        let parser = parserCache.AddOrUpdate(endPoint, createParser endPoint, fun _ value -> value)
+        parser.Execute( ArraySegment(data) ) |> ignore
     
     //ensures the listening socket is shutdown on disposal.
     let cleanUp disposing = 
@@ -45,7 +43,7 @@ type HttpServer(onRequest) as this =
                 (svr :> IDisposable).Dispose()
             disposed := true
         
-    member h.Start(port) = svr.Listen(IPAddress.Loopback, port)
+    member this.Start(port) = svr.Listen(IPAddress.Loopback, port)
 
     interface IDisposable with
         member h.Dispose() =
