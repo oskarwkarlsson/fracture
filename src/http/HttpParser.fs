@@ -38,35 +38,6 @@ type HttpParser(cont) =
       "Last-Modified"
     |]
 
-    let writeToStream (bs: byte list, stream: Stream) =
-        if bs.Length <= 0 then () else
-        let block = bs |> List.rev |> List.toArray
-        stream.Write(block, 0, block.Length)
-
-    let updateRequest state =
-        match state with
-        | StartLine (bs, request) ->
-            let block = bs |> List.rev |> List.toArray
-            let line = Encoding.ASCII.GetString(block)
-            HttpParser.ParseRequestLine(line, request)
-            Headers ([], request)
-        | Headers (bs, request) ->
-            match bs with
-            | [] -> Body ([], request, null)
-            | _ ->
-                let block = bs |> List.rev |> List.toArray
-                let line = Encoding.ASCII.GetString(block)
-                HttpParser.ParseHeader(line, request)
-                Headers ([], request)
-        | Body (bs, request, null) ->
-            let stream = new MemoryStream() :> Stream
-            request.Content <- new StreamContent(stream)
-            writeToStream (bs, stream)
-            Body ([], request, stream)
-        | Body (bs, request, stream) ->
-            writeToStream (bs, stream)
-            Body ([], request, stream)
-
     let agent = Agent.Start(fun inbox ->
         let states = new EPSDictionary()
         let rec step () = async {
@@ -80,20 +51,20 @@ type HttpParser(cont) =
                     if i = chunk.Count then sb, state else
                     let c = chunk.Array.[i + chunk.Offset]
                     if c = '\r'B then
-                        let state' = updateRequest state
+                        let state' = HttpParser.UpdateRequest state
                         let j = i + 1
                         if j < chunk.Count && chunk.Array.[j + chunk.Offset] = '\n'B then
                             loop [] (j + 1) state'
                         else loop [] j state'
                     elif c = '\n'B then
-                        let state' = updateRequest state
+                        let state' = HttpParser.UpdateRequest state
                         loop [] (i + 1) state'
                     else
                         loop (c :: sb) (i + 1) state
                 let acc', state' = loop [] 0 state
                 return! step ()
             else
-                let state' = updateRequest state
+                let state' = HttpParser.UpdateRequest state
                 cont(endPoint, state'.Request)
                 states.Remove(endPoint) |> ignore
                 return! step () }
@@ -125,3 +96,32 @@ type HttpParser(cont) =
         | _ -> request.Headers.Add(name, value)
 
     static member private IsContentHeader(name) = Array.exists ((=) name) contentHeaders
+
+    static member private UpdateRequest state =
+        match state with
+        | StartLine (bs, request) ->
+            let block = bs |> List.rev |> List.toArray
+            let line = Encoding.ASCII.GetString(block)
+            HttpParser.ParseRequestLine(line, request)
+            Headers ([], request)
+        | Headers (bs, request) ->
+            match bs with
+            | [] -> Body ([], request, null)
+            | _ ->
+                let block = bs |> List.rev |> List.toArray
+                let line = Encoding.ASCII.GetString(block)
+                HttpParser.ParseHeader(line, request)
+                Headers ([], request)
+        | Body (bs, request, null) ->
+            let stream = new MemoryStream() :> Stream
+            request.Content <- new StreamContent(stream)
+            HttpParser.WriteToStream (bs, stream)
+            Body ([], request, stream)
+        | Body (bs, request, stream) ->
+            HttpParser.WriteToStream (bs, stream)
+            Body ([], request, stream)
+
+    static member private WriteToStream (bs: byte list, stream: Stream) =
+        if bs.Length <= 0 then () else
+        let block = bs |> List.rev |> List.toArray
+        stream.Write(block, 0, block.Length)
