@@ -3,6 +3,7 @@
 open System
 open System.Diagnostics.Contracts
 open System.IO
+open System.Net
 open System.Net.Http
 open System.Text
 open FSharp.Control
@@ -10,9 +11,17 @@ open FSharp.IO
 open FSharpx
 
 type private ParserState =
-  | StartLine
-  | Headers
-  | Body
+  | StartLine of byte list * HttpRequestMessage
+  | Headers of byte list * HttpRequestMessage
+  | Body of byte list * HttpRequestMessage * Stream
+  with
+  member x.Request =
+      match x with
+      | StartLine (_, request) -> request
+      | Headers (_, request) -> request
+      | Body (_, request, _) -> request
+
+type private EPSDictionary = System.Collections.Generic.Dictionary<EndPoint, ParserState>
 
 type HttpParser(cont) =
 
@@ -29,55 +38,68 @@ type HttpParser(cont) =
       "Last-Modified"
     |]
 
-    let agent = Agent.Start(fun inbox ->
-        let stream : MemoryStream ref = ref null
+    let writeToStream (bs: byte list, stream: Stream) =
+        if bs.Length <= 0 then () else
+        let block = bs |> List.rev |> List.toArray
+        stream.Write(block, 0, block.Length)
 
-        let updateRequest (sb: byte list) state request =
-            let block = sb |> List.rev |> List.toArray
-            match state with
-            | StartLine ->
-                let line = Encoding.ASCII.GetString(block)
-                HttpParser.ParseRequestLine(line, request)
-                Headers
-            | Headers ->
-                if Array.length block = 0 then Body else
+    let updateRequest state =
+        match state with
+        | StartLine (bs, request) ->
+            let block = bs |> List.rev |> List.toArray
+            let line = Encoding.ASCII.GetString(block)
+            HttpParser.ParseRequestLine(line, request)
+            Headers ([], request)
+        | Headers (bs, request) ->
+            match bs with
+            | [] -> Body ([], request, null)
+            | _ ->
+                let block = bs |> List.rev |> List.toArray
                 let line = Encoding.ASCII.GetString(block)
                 HttpParser.ParseHeader(line, request)
-                Headers
-            | Body ->
-                if request.Content = null then
-                    stream := new MemoryStream()
-                    request.Content <- new StreamContent(!stream)
-                stream.Value.Write(block, 0, block.Length)
-                Body
+                Headers ([], request)
+        | Body (bs, request, null) ->
+            let stream = new MemoryStream() :> Stream
+            request.Content <- new StreamContent(stream)
+            writeToStream (bs, stream)
+            Body ([], request, stream)
+        | Body (bs, request, stream) ->
+            writeToStream (bs, stream)
+            Body ([], request, stream)
 
-        let rec step acc state request = async {
-            let! (chunk: ArraySegment<byte>) = inbox.Receive()
+    let agent = Agent.Start(fun inbox ->
+        let states = new EPSDictionary()
+        let rec step () = async {
+            let! (endPoint, chunk: ArraySegment<byte>) = inbox.Receive()
+            let state =
+                if not <| states.ContainsKey(endPoint) then
+                    StartLine([], new HttpRequestMessage())
+                else states.[endPoint]
             if chunk.Count > 0 then
                 let rec loop sb i state =
                     if i = chunk.Count then sb, state else
                     let c = chunk.Array.[i + chunk.Offset]
                     if c = '\r'B then
-                        let state' = updateRequest sb state request
+                        let state' = updateRequest state
                         let j = i + 1
                         if j < chunk.Count && chunk.Array.[j + chunk.Offset] = '\n'B then
                             loop [] (j + 1) state'
                         else loop [] j state'
                     elif c = '\n'B then
-                        let state' = updateRequest sb state request
+                        let state' = updateRequest state
                         loop [] (i + 1) state'
                     else
                         loop (c :: sb) (i + 1) state
                 let acc', state' = loop [] 0 state
-                return! step acc' state' request
+                return! step ()
             else
-                updateRequest acc state request |> ignore
-                cont request
-                stream := null
-                return! step [] StartLine <| new HttpRequestMessage() }
-        step [] StartLine <| new HttpRequestMessage() )
+                let state' = updateRequest state
+                cont(endPoint, state'.Request)
+                states.Remove(endPoint) |> ignore
+                return! step () }
+        step () )
 
-    member x.Post(data) = agent.Post data
+    member x.Post(endPoint, data) = agent.Post (endPoint, data)
 
     static member private ParseRequestLine (requestLine: string, request: HttpRequestMessage) =
         let arr = requestLine.Split([|' '|], 3)
