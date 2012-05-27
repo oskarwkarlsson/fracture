@@ -18,9 +18,6 @@ open FSharp.IO
 type HttpServer(onRequest) =
     let disposed = ref false
 
-    let onDisconnect endPoint = 
-        Console.WriteLine(sprintf "Disconnect from %s" <| endPoint.ToString())
-
     let rec svr = TcpServer.Create(received = onReceive, disconnected = onDisconnect)
 
     and parser =
@@ -32,6 +29,10 @@ type HttpServer(onRequest) =
             onRequest(request, svr.Send endPoint keepAlive))
 
     and onReceive (endPoint, data) = parser.Post (endPoint, ArraySegment<_>(data))
+
+    and onDisconnect endPoint = 
+        Console.WriteLine(sprintf "Disconnect from %s" <| endPoint.ToString())
+        parser.Post(endPoint, ArraySegment<_>())
 
     //ensures the listening socket is shutdown on disposal.
     member private this.Dispose(disposing) = 
