@@ -1,17 +1,17 @@
 ﻿namespace Fracture
 
 open System
+open System.Collections.Generic
+open System.Collections.Concurrent
 open System.Diagnostics
 open System.Net
 open System.Net.Sockets
-open System.Collections.Generic
-open System.Collections.Concurrent
-open Fracture.SocketExtensions
-open Fracture.Pipelets
 open System.Threading
 open System.Threading.Tasks
 open System.Threading.Tasks.Dataflow
 open Fracture.Common
+open Fracture.Pipelets
+open Fracture.SocketExtensions
 open Fracture.Threading
 
 ///Creates a new TcpServer using the specified parameters
@@ -44,7 +44,7 @@ type TcpServer(poolSize, perOperationBufferSize, acceptBacklogCount, received, ?
             disconnected |> Option.iter (fun callback -> callback(ep) ))
 
     let propagateReceive (receiveArgs)=
-        if not <|receiveAction.Post(receiveArgs) then
+        if not <| receiveAction.Post(receiveArgs) then
             overflow |> Option.iter  (fun overflow-> overflow receiveArgs)
 
     ///This function is called on each connect,sends,receive, and disconnect
