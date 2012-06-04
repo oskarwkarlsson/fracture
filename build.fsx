@@ -33,7 +33,7 @@ let target = getBuildParamOrDefault "target" "All"
 // tools
 let fakePath = "./packages/FAKE.1.64.5/tools"
 let nugetPath = "./.nuget/nuget.exe"
-let nunitPath = "./packages/NUnit.2.5.9.10348/Tools"
+let nunitPath = "./packages/NUnit.Runners.2.6.0.12051/Tools"
 
 // files
 let appReferences =
