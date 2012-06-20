@@ -45,12 +45,12 @@ type HttpServer(onRequest) as this =
     and createParser endPoint = 
         HttpParser(ParserDelegate(onHeaders = (fun headers -> (Console.WriteLine(sprintf "Headers: %A" headers.Headers))), //NOTE: on ab.exe without the keepalive option only the headers callback fires
                                   requestBody = (fun body -> (Console.WriteLine(sprintf "Body: %A" body))),
-                                  requestEnded = fun req -> onRequest( req, (svr:TcpServer).Send endPoint req.RequestHeaders.KeepAlive) 
+                                  requestEnded = fun req -> onRequest( req, (svr:TcpServer).Send endPoint (req.Headers.ConnectionClose.GetValueOrDefault())) 
                    ))
 
     and onReceive (endPoint, data) =
         let parser = parserCache.AddOrUpdate(endPoint, createParser endPoint, fun _ value -> value)
-        parser.Execute( ArraySegment(data) ) |> ignore
+        parser.Execute(ArraySegment(data)) |> ignore
     
     //ensures the listening socket is shutdown on disposal.
     let cleanUp disposing = 
