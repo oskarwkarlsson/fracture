@@ -2,71 +2,66 @@
 module Fracture.Http.Core
 
 open System
-open System.Net
-open Fracture
-open HttpMachine
 open System.Collections.Generic
 open System.Diagnostics
-
-type HttpRequestHeaders =
-    { Method: string
-      Uri: string
-      Query: string
-      Fragment: string
-      Version: Version
-      KeepAlive: bool
-      Headers: IDictionary<string, string> }
-    with static member Default =
-            { Method = String.Empty
-              Uri = String.Empty
-              Query = String.Empty
-              Fragment = String.Empty
-              Version = Version()
-              KeepAlive = false
-              Headers = new Dictionary<string, string>() :> IDictionary<string, string> }
-
-type HttpRequest =
-    { RequestHeaders: HttpRequestHeaders
-      Body: ArraySegment<byte> }
+open System.IO
+open System.Net
+open System.Net.Http
+open Fracture
+open HttpMachine
 
 type ParserDelegate(?onHeaders, ?requestBody, ?requestEnded) as p =
-    [<DefaultValue>] val mutable method' : string
-    [<DefaultValue>] val mutable requestUri: string
-    [<DefaultValue>] val mutable fragment : string
-    [<DefaultValue>] val mutable queryString : string
     [<DefaultValue>] val mutable headerName : string
     [<DefaultValue>] val mutable headerValue : string
-    [<DefaultValue>] val mutable fullRequest:HttpRequest 
-    [<DefaultValue>] val mutable requestHeaders:HttpRequestHeaders 
-    [<DefaultValue>] val mutable body:ArraySegment<byte>
-    let mutable headers = new Dictionary<string,string>()
+    [<DefaultValue>] val mutable request : HttpRequestMessage
+    [<DefaultValue>] val mutable body : MemoryStream
+
+    static let contentHeaders = [|
+      "Allow"
+      "Content-Encoding"
+      "Content-Language"
+      "Content-Length"
+      "Content-Location"
+      "Content-MD5"
+      "Content-Range"
+      "Content-Type"
+      "Expires"
+      "Last-Modified"
+    |]
+
+    static let isContentHeader name = Array.exists ((=) name) contentHeaders
 
     let commitHeader() = 
-        headers.Add(p.headerName, p.headerValue)
+        match p.headerName, p.headerValue with
+        | "Host" as h, v ->
+            p.request.Headers.Host <- v
+            // A Host header is required. This can be used to fill in the RequestUri if a fully qualified URI was not provided.
+            // However, we don't want to replace the URI if a fully qualified URI was provided, as it may have used a different protocol, e.g. https.
+            // Also note that we don't fail hard if a Host was not provided. This may need to change.
+            if not p.request.RequestUri.IsAbsoluteUri then
+                p.request.RequestUri <- Uri(Uri("http://" + v), p.request.RequestUri)
+        | h, v when isContentHeader h ->
+            p.request.Content.Headers.Add(h, v)
+        | h, v -> p.request.Headers.Add(h, v)
         p.headerName <- null
         p.headerValue <- null
 
     interface IHttpParserHandler with
         member this.OnMessageBegin(parser: HttpParser) =
-            this.method' <- null
-            this.requestUri <- null
-            this.fragment <- null
-            this.queryString <- null
             this.headerName <- null
             this.headerValue <- null
-            headers.Clear()
+            this.body <- new MemoryStream()
+            this.request <- new HttpRequestMessage(Content = new StreamContent(this.body))
 
-        member this.OnMethod( parser, m) = 
-            this.method' <- m
+        member this.OnMethod(_, m) = 
+            this.request.Method <- HttpMethod m
 
         member this.OnRequestUri(_, requestUri) = 
-            this.requestUri <- requestUri
+            this.request.RequestUri <- Uri(requestUri)
 
-        member this.OnFragment(_, fragment) = 
-            this.fragment <- fragment
+        member this.OnFragment(_, fragment) = ()
 
-        member this.OnQueryString(_, queryString) = 
-            this.queryString <- queryString
+        member this.OnQueryString(_, queryString) = ()
 
         member this.OnHeaderName(_, name) = 
             if not (String.IsNullOrEmpty(this.headerValue)) then
@@ -81,22 +76,13 @@ type ParserDelegate(?onHeaders, ?requestBody, ?requestEnded) as p =
         member this.OnHeadersEnd(parser) = 
             if not (String.IsNullOrEmpty(this.headerValue)) then
                 commitHeader()
-
-            p.requestHeaders <- { Method = this.method'
-                                  Uri = this.requestUri
-                                  Query = this.queryString
-                                  Fragment = this.fragment
-                                  Version = Version(parser.MajorVersion, parser.MinorVersion)
-                                  KeepAlive = parser.ShouldKeepAlive
-                                  Headers = headers }
-
-            onHeaders |> Option.iter (fun f -> f p.requestHeaders)
+            onHeaders |> Option.iter (fun f -> f p.request)
 
         member this.OnBody(_, data) =
             // XXX can we defer this check to the parser?
             if data.Count > 0 then
-                p.body <- data
-                requestBody |> Option.iter (fun f -> f p.body)
+                p.body.Write(data.Array, data.Offset, data.Count)
+                requestBody |> Option.iter (fun f -> f p.request)
 
         member this.OnMessageEnd(_) =
-            requestEnded |> Option.iter (fun f -> f { RequestHeaders = p.requestHeaders; Body = p.body })
+            requestEnded |> Option.iter (fun f -> f p.request)
