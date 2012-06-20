@@ -9,12 +9,8 @@ open System.Text
 open FSharp.Control
 open FSharp.IO
 open FSharpx
-
-type private ParserState =
-  | StartLine of byte list * Stream * HttpRequestMessage
-  | Headers of byte list * Stream * HttpRequestMessage
-  | Body of byte list * int64 * Stream * HttpRequestMessage
-  | Done of HttpRequestMessage
+open FSharpx.Iteratee
+open FSharpx.Iteratee.Binary
 
 type HttpParser(cont) =
 
@@ -31,44 +27,33 @@ type HttpParser(cont) =
       "Last-Modified"
     |]
 
-    let mutable stream = new MemoryStream()
-    let mutable state = StartLine([], stream, new HttpRequestMessage(Content = new StreamContent(stream)))
+    let mutable state =
+        match readLines with
+        | Continue k -> k
+        | _ -> fun _ -> Error(failwith "Bad initial state")
 
     member x.Post(chunk: ArraySegment<_>) =
-        if chunk.Count > 0 then
-            let rec loop i state =
-                if i = chunk.Count then state else
-                let c = chunk.Array.[i + chunk.Offset]
-                if c = '\r'B then
-                    let state' = HttpParser.UpdateRequest state
-                    let j = i + 1
-                    if j < chunk.Count && chunk.Array.[j + chunk.Offset] = '\n'B then
-                        loop (j + 1) state'
-                    else loop j state'
-                elif c = '\n'B then
-                    let state' = HttpParser.UpdateRequest state
-                    loop (i + 1) state'
-                else
-                    let state' =
-                        match state with
-                        | StartLine(bs, stream, request) -> StartLine(c::bs, stream, request)
-                        | Headers(bs, stream, request) -> Headers(c::bs, stream, request)
-                        | Body(bs, bytesRead, stream, request) -> Body(c::bs, bytesRead, stream, request)
-                        | _ -> state
-                    loop (i + 1) state'
-            let state' = loop 0 state
-            match state' with
-            | Done request ->
-                cont request
-            | _ -> state <- state'
-        else
-            match state with
-            | Done _ -> ()
-            | state ->
-                match HttpParser.UpdateRequest state with
-                | Done request ->
+        match state (Chunk <| ByteString.ofArraySegment chunk) with
+        | Continue k -> state <- k
+        | Error exn -> raise exn
+        | Done(lines, rest) ->
+            let stream = new MemoryStream()
+            let request = new HttpRequestMessage(Content = new StreamContent(stream))
+            match lines with
+            | startLine::headers ->
+                HttpParser.ParseRequestLine(ByteString.toString startLine, request)
+                for header in headers do HttpParser.ParseHeader(ByteString.toString header, request)
+                if request.Method = HttpMethod.Get || request.Method = HttpMethod.Head then
                     cont request
-                | _ -> () // the socket may have paused. We should probably add a timeout that is reset on each received packet.
+                else ()
+                // Write the remaining bytes to the stream.
+                // TODO: allow the request to be sent along, while retaining a reference so that we can continue writing to the stream.
+//                    HttpParser.WriteToStream (bs, stream)
+//                    let bytesRead = bytesRead + int64 bs.Length
+//                    if bs.Length = 0 || (request.Content.Headers.ContentLength.HasValue && bytesRead = request.Content.Headers.ContentLength.Value) then
+//                        Done request
+//                    else Body ([], bytesRead, stream, request)
+            | _ -> () // nothing was received
 
     static member private ParseRequestLine (requestLine: string, request: HttpRequestMessage) =
         let arr = requestLine.Split([|' '|], 3)
@@ -94,33 +79,6 @@ type HttpParser(cont) =
         | _ -> request.Headers.Add(name, value)
 
     static member private IsContentHeader(name) = Array.exists ((=) name) contentHeaders
-
-    static member private UpdateRequest state =
-        match state with
-        | StartLine (bs, stream, request) ->
-            let block = bs |> List.rev |> List.toArray
-            let line = Encoding.ASCII.GetString(block)
-            HttpParser.ParseRequestLine(line, request)
-            Headers ([], stream, request)
-        | Headers (bs, stream, request) ->
-            match bs with
-            | [] ->
-                if request.Method = HttpMethod.Get || request.Method = HttpMethod.Head then
-                    // TODO: This isn't technically correct, but we need to fix this later.
-                    Done request
-                else Body ([], 0L, stream, request)
-            | _ ->
-                let block = bs |> List.rev |> List.toArray
-                let line = Encoding.ASCII.GetString(block)
-                HttpParser.ParseHeader(line, request)
-                Headers ([], stream, request)
-        | Body (bs, bytesRead, stream, request) ->
-            HttpParser.WriteToStream (bs, stream)
-            let bytesRead = bytesRead + int64 bs.Length
-            if bs.Length = 0 || (request.Content.Headers.ContentLength.HasValue && bytesRead = request.Content.Headers.ContentLength.Value) then
-                Done request
-            else Body ([], bytesRead, stream, request)
-        | s -> s
 
     static member private WriteToStream (bs: byte list, stream: Stream) =
         if bs.Length <= 0 then () else
