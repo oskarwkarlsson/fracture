@@ -37,40 +37,14 @@
   </PropertyGroup>
   <Import Project="..\..\lib\FSharp\v4.0\bin\Microsoft.FSharp.Targets" />
   <ItemGroup>
-    <Compile Include="Hex.fs" />
-    <Compile Include="Primitives.fs" />
-    <Compile Include="CharParsers.fs" />
-    <Compile Include="Uri.fs" />
-    <Compile Include="Http.fs" />
     <Compile Include="HttpMachineTemp.fs" />
     <Compile Include="HttpServer.fs" />
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <Reference Include="FParsec">
-      <HintPath>..\..\packages\FParsec.0.9.1\lib\net40\FParsec.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="FParsecCS">
-      <HintPath>..\..\packages\FParsec.0.9.1\lib\net40\FParsecCS.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="FSharp.AsyncExtensions">
-      <HintPath>..\..\packages\FSharpx.Core.1.3.111030\lib\FSharp.AsyncExtensions.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="FSharpx.Core">
-      <HintPath>..\..\packages\FSharpx.Core.1.3.111030\lib\FSharpx.Core.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="FSharpx.Http">
-      <HintPath>..\..\packages\FSharpx.Core.1.3.111030\lib\FSharpx.Http.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
     <Reference Include="HttpMachine">
       <HintPath>..\..\packages\HttpMachine.0.9.0.0\lib\HttpMachine.dll</HintPath>
     </Reference>
-    <Reference Include="HttpMachine" />
     <Reference Include="mscorlib" />
     <Reference Include="FSharp.Core">
       <HintPath>..\..\lib\FSharp\v4.0\bin\FSharp.Core.dll</HintPath>
