@@ -17,22 +17,28 @@ open FSharp.IO
 
 type HttpServer(onRequest) =
     let disposed = ref false
+    let parserCache = new ConcurrentDictionary<_,_>()
+
+    let onDisconnect endPoint = 
+        Console.WriteLine(sprintf "Disconnect from %s" <| endPoint.ToString())
+        parserCache.TryRemove(endPoint)
+        |> fun (removed, parser: HttpParser) ->
+            if removed then
+                parser.Post (ArraySegment<_>())
 
     let rec svr = TcpServer.Create(received = onReceive, disconnected = onDisconnect)
 
-    and parser =
-        HttpParser (fun (endPoint, request) ->
+    and createParser endPoint =
+        HttpParser (fun request ->
             let keepAlive =
                 if request.Headers.ConnectionClose.HasValue then
                     not request.Headers.ConnectionClose.Value
                 else false
             onRequest(request, svr.Send endPoint keepAlive))
 
-    and onReceive (endPoint, data) = parser.Post (endPoint, ArraySegment<_>(data))
-
-    and onDisconnect endPoint = 
-        Console.WriteLine(sprintf "Disconnect from %s" <| endPoint.ToString())
-        parser.Post(endPoint, ArraySegment<_>())
+    and onReceive (endPoint, data) =
+        let parser = parserCache.AddOrUpdate(endPoint, createParser endPoint, fun _ value -> value)
+        parser.Post (ArraySegment<_>(data))
 
     //ensures the listening socket is shutdown on disposal.
     member private this.Dispose(disposing) = 

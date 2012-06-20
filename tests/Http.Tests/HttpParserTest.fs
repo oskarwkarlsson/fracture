@@ -21,11 +21,9 @@ let ``test performance of 100k parses``() =
   let message = "GET http://wizardsofsmart.net/foo HTTP/1.1\r\n\r\n"B
   let time = ref 0L
   let timer = System.Diagnostics.Stopwatch.StartNew()
-  let parser = new HttpParser(fun _ ->
-    time := !time + timer.ElapsedMilliseconds
-    timer.Reset() )
   for x = 1 to 100000 do
-    parser.Post(endPoint, ArraySegment(message))
+    let parser = new HttpParser(ignore)
+    parser.Post (ArraySegment(message))
   timer.Stop()
   Console.WriteLine("Parsed 100k GET requests in {0} ms.", !time)
   test <@ !time < 350L @>
@@ -35,12 +33,10 @@ let ``test performance of 100k parses with HttpMachine``() =
   let message = "GET http://wizardsofsmart.net/foo HTTP/1.1\r\n\r\n"B
   let time = ref 0L
   let timer = System.Diagnostics.Stopwatch.StartNew()
-  let handler = Fracture.Http.Core.ParserDelegate(ignore, ignore, fun _ ->
-    time := !time + timer.ElapsedMilliseconds
-    timer.Reset() )
-  let parser = new HttpMachine.HttpParser(handler)
   for x = 1 to 100000 do
-    parser.Execute(ArraySegment<_>(message)) |> ignore
+    let handler = Fracture.Http.Core.ParserDelegate(ignore, ignore, ignore)
+    let parser = new HttpMachine.HttpParser(handler)
+    parser.Execute (ArraySegment<_>(message)) |> ignore
   timer.Stop()
   Console.WriteLine("Parsed 100k GET requests in {0} ms.", !time)
   test <@ !time < 500L @>
@@ -66,7 +62,7 @@ type TestRequest = {
 [<TestCaseSource("requests")>]
 let ``test parser correctly parses the request``(testRequest: TestRequest) =
   use stream = new MemoryStream(testRequest.Raw)
-  let parser = HttpParser(fun (endPoint, request) ->
+  let parser = HttpParser(fun request ->
     try
       try
         test <@ request <> null @>
@@ -78,7 +74,7 @@ let ``test parser correctly parses the request``(testRequest: TestRequest) =
         test <@ (request.Headers |> Seq.length) = (testRequest.Headers |> Seq.length) @>
       with e -> test <@ testRequest.ShouldFail @>
     finally request.Dispose())
-  parser.Post(endPoint, ArraySegment(testRequest.Raw))
+  parser.Post (ArraySegment(testRequest.Raw))
 
 ////  use stream = new CircularStream(20)
 ////

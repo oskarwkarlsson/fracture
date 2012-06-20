@@ -16,8 +16,6 @@ type private ParserState =
   | Body of byte list * int64 * Stream * HttpRequestMessage
   | Done of HttpRequestMessage
 
-type private EPSDictionary = System.Collections.Generic.Dictionary<EndPoint, ParserState>
-
 type HttpParser(cont) =
 
     static let contentHeaders = [|
@@ -33,58 +31,44 @@ type HttpParser(cont) =
       "Last-Modified"
     |]
 
-    let agent = Agent.Start(fun inbox ->
-        let states = new EPSDictionary()
-        let rec step () = async {
-            let! (endPoint, chunk: ArraySegment<byte>) = inbox.Receive()
-            if chunk.Count > 0 then
-                let state =
-                    if not <| states.ContainsKey(endPoint) then
-                        let stream = new MemoryStream()
-                        StartLine([], stream, new HttpRequestMessage(Content = new StreamContent(stream)))
-                    else states.[endPoint]
-                let rec loop i state =
-                    if i = chunk.Count then state else
-                    let c = chunk.Array.[i + chunk.Offset]
-                    if c = '\r'B then
-                        let state' = HttpParser.UpdateRequest state
-                        let j = i + 1
-                        if j < chunk.Count && chunk.Array.[j + chunk.Offset] = '\n'B then
-                            loop (j + 1) state'
-                        else loop j state'
-                    elif c = '\n'B then
-                        let state' = HttpParser.UpdateRequest state
-                        loop (i + 1) state'
-                    else
-                        let state' =
-                            match state with
-                            | StartLine(bs, stream, request) -> StartLine(c::bs, stream, request)
-                            | Headers(bs, stream, request) -> Headers(c::bs, stream, request)
-                            | Body(bs, bytesRead, stream, request) -> Body(c::bs, bytesRead, stream, request)
-                            | _ -> state
-                        loop (i + 1) state'
-                let state' = loop 0 state
-                match state' with
-                | Done request ->
-                    cont(endPoint, request)
-                    if states.ContainsKey(endPoint) then states.Remove(endPoint) |> ignore
-                | _ -> states.[endPoint] <- state'
-                return! step ()
-            else
-                if states.ContainsKey(endPoint) then
-                    match states.[endPoint] with
-                    | Done _ ->
-                        states.Remove(endPoint) |> ignore
-                    | state ->
-                        match HttpParser.UpdateRequest state with
-                        | Done request ->
-                            cont(endPoint, request)
-                            states.Remove(endPoint) |> ignore
-                        | _ -> () // the socket may have paused. We should probably add a timeout that is reset on each received packet.
-                return! step () }
-        step () )
+    let mutable stream = new MemoryStream()
+    let mutable state = StartLine([], stream, new HttpRequestMessage(Content = new StreamContent(stream)))
 
-    member x.Post(endPoint, data) = agent.Post (endPoint, data)
+    member x.Post(chunk: ArraySegment<_>) =
+        if chunk.Count > 0 then
+            let rec loop i state =
+                if i = chunk.Count then state else
+                let c = chunk.Array.[i + chunk.Offset]
+                if c = '\r'B then
+                    let state' = HttpParser.UpdateRequest state
+                    let j = i + 1
+                    if j < chunk.Count && chunk.Array.[j + chunk.Offset] = '\n'B then
+                        loop (j + 1) state'
+                    else loop j state'
+                elif c = '\n'B then
+                    let state' = HttpParser.UpdateRequest state
+                    loop (i + 1) state'
+                else
+                    let state' =
+                        match state with
+                        | StartLine(bs, stream, request) -> StartLine(c::bs, stream, request)
+                        | Headers(bs, stream, request) -> Headers(c::bs, stream, request)
+                        | Body(bs, bytesRead, stream, request) -> Body(c::bs, bytesRead, stream, request)
+                        | _ -> state
+                    loop (i + 1) state'
+            let state' = loop 0 state
+            match state' with
+            | Done request ->
+                cont request
+            | _ -> state <- state'
+        else
+            match state with
+            | Done _ -> ()
+            | state ->
+                match HttpParser.UpdateRequest state with
+                | Done request ->
+                    cont request
+                | _ -> () // the socket may have paused. We should probably add a timeout that is reset on each received packet.
 
     static member private ParseRequestLine (requestLine: string, request: HttpRequestMessage) =
         let arr = requestLine.Split([|' '|], 3)
