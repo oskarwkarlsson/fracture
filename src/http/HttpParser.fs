@@ -27,8 +27,17 @@ type HttpParser(cont) =
       "Last-Modified"
     |]
 
+    let readHeaders =
+        let rec lines cont = readLine >>= fun bs -> skipNewline >>= check cont bs
+        and check cont bs count =
+            match bs, count with
+            | bs, _ when ByteString.isEmpty bs -> Done(cont [], EOF)
+            | bs, 0 -> Done(cont [bs], EOF)
+            | _ -> lines <| fun tail -> cont <| bs::tail
+        lines id
+ 
     let mutable state =
-        match readLines with
+        match readHeaders with
         | Continue k -> k
         | _ -> fun _ -> Error(failwith "Bad initial state")
 
@@ -58,14 +67,14 @@ type HttpParser(cont) =
     static member private ParseRequestLine (requestLine: string, request: HttpRequestMessage) =
         let arr = requestLine.Split([|' '|], 3)
         request.Method <- HttpMethod(arr.[0])
-        let uri = arr.[1] in
+        let uri = arr.[1]
         request.RequestUri <- Uri(uri, if uri.StartsWith("/") then UriKind.Relative else UriKind.Absolute)
         request.Version <- Version.Parse(arr.[2].TrimStart("HTP/".ToCharArray()))
 
     static member private ParseHeader (header: string, request: HttpRequestMessage) =
         let name, value =
-            let pair = header.Split([|':'|], 2) in
-            pair.[0], pair.[1].TrimStart(' ')
+            let pair = header.Split([|':'|], 2)
+            pair.[0], if pair.Length > 1 then pair.[1].TrimStart(' ') else ""
         match name, value with
         | "Host" as h, v ->
             request.Headers.Host <- v
