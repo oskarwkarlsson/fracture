@@ -29,8 +29,9 @@ open Fracture
 open Fracture.Common
 open Fracture.Pipelets
 open HttpMachine
+open Owin
 
-type HttpServer(onRequest) as this = 
+type HttpServer(app: Request -> Async<Response>) as this = 
     let disposed = ref false
     let parserCache = new ConcurrentDictionary<_,_>()
 
