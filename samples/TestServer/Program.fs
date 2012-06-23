@@ -19,7 +19,7 @@ open System
 open System.Collections.Generic
 open System.Diagnostics
 open Fracture
-open Fracture.Http.Core
+open Fracture.Http
 
 let debug (x:UnhandledExceptionEventArgs) =
     Console.WriteLine(sprintf "%A" (x.ExceptionObject :?> Exception))
@@ -27,7 +27,7 @@ let debug (x:UnhandledExceptionEventArgs) =
 
 System.AppDomain.CurrentDomain.UnhandledException |> Observable.add debug
 let shortdate = DateTime.UtcNow.ToShortDateString
-open Fracture.HttpServer
+open Fracture.Http
 
 let data = "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nConnection: Keep-Alive\r\nContent-Length: 16\r\nServer: Fracture\r\n\r\nHello world.\r\n\r\n"B
 

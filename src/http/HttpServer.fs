@@ -15,21 +15,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //----------------------------------------------------------------------------
-module Fracture.HttpServer
+namespace Fracture.Http
 #nowarn "40"
 
 open System
-open System.Text
+open System.Collections.Concurrent
+open System.Collections.Generic
+open System.Diagnostics
 open System.Net
+open System.Text
 open System.Threading.Tasks
 open Fracture
 open Fracture.Common
-open HttpMachine
-open System.Collections.Generic
-open System.Diagnostics
-open System.Collections.Concurrent
 open Fracture.Pipelets
-open Fracture.Http.Core
+open HttpMachine
 
 type HttpServer(onRequest) as this = 
     let disposed = ref false

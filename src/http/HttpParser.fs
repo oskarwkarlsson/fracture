@@ -15,15 +15,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //----------------------------------------------------------------------------
-[<AutoOpen>]
-module Fracture.Http.Core
+namespace Fracture.Http
 
 open System
+open System.Collections.Generic
+open System.Diagnostics
 open System.Net
 open Fracture
 open HttpMachine
-open System.Collections.Generic
-open System.Diagnostics
 
 type HttpRequestHeaders =
     { Method: string
