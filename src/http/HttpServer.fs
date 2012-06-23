@@ -27,9 +27,11 @@ open System.Text
 open Fracture
 open Fracture.Common
 open HttpMachine
+open Owin
 
-type HttpServer(headers, body, requestEnd) as this = 
+type HttpServer(app: Request -> Async<Response>) as this =
     let mutable disposed = false
+    let parserCache = new ConcurrentDictionary<_,_>()
 
     let svr = TcpServer.Create((fun (data,svr,sd) -> 
         let parser =
