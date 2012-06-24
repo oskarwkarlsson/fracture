@@ -28,6 +28,7 @@ open System.Threading.Tasks
 open Fracture
 open Fracture.Common
 open Fracture.Pipelets
+open FSharp.Control
 open HttpMachine
 open Owin
 
@@ -44,7 +45,7 @@ type HttpServer(app: Request -> Async<Response>) as this =
 
     let rec svr = TcpServer.Create(received = onReceive, disconnected = onDisconnect)
     and createParser endPoint = 
-        HttpParser(ParserDelegate(requestEnded = fun req -> onRequest( req, (svr:TcpServer).Send endPoint req.RequestHeaders.KeepAlive)))
+        HttpParser(ParserDelegate(app, (svr.Send endPoint)))
 
     and onReceive (endPoint, data) =
         let parser = parserCache.AddOrUpdate(endPoint, createParser endPoint, fun _ value -> value)
