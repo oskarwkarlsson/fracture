@@ -20,7 +20,7 @@ open System.Collections.Generic
 open System.Diagnostics
 open System.Net
 open Fracture.Http
-open Fracture.Common
+open FSharp.Control
 
 let debug (x:UnhandledExceptionEventArgs) =
     Console.WriteLine(sprintf "%A" (x.ExceptionObject :?> Exception))
@@ -29,11 +29,19 @@ let debug (x:UnhandledExceptionEventArgs) =
 System.AppDomain.CurrentDomain.UnhandledException |> Observable.add debug
 let shortdate = DateTime.UtcNow.ToShortDateString
 
-let server = new HttpServer (fun (req, res) ->
-    let result = res data
-    ()
- )
+let server = new HttpServer (fun req -> async {
+    return {
+        StatusCode = 200
+        Headers =
+            [|  ("Content-Type", [| "text/plain" |])
+                ("Content-Length", [| "13" |])
+                ("Server", [| "Fracture" |])
+            |] |> dict
+        Body = asyncSeq { yield ArraySegment<_>("Hello, world!"B) }
+        Properties = new Dictionary<string, obj>()
+    } 
+})
 
 server.Start(6667)
-printfn "Http Server started"
+printfn "Http Server started on port 6667"
 Console.ReadKey() |> ignore

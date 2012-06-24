@@ -26,6 +26,8 @@ open System.Net
 open System.Text
 open Fracture
 open Fracture.Common
+open Fracture.Pipelets
+open FSharp.Control
 open HttpMachine
 open Owin
 
@@ -33,19 +35,11 @@ type HttpServer(app: Request -> Async<Response>) as this =
     let mutable disposed = false
     let parserCache = new ConcurrentDictionary<_,_>()
 
-    let svr = TcpServer.Create((fun (data,svr,sd) -> 
-        let parser =
-            let parserDelegate = ParserDelegate(onHeaders = (fun h -> headers(h,this,sd)), 
-                                                requestBody = (fun data -> (body(data, svr,sd))), 
-                                                requestEnded = (fun req -> (requestEnd(req, svr, sd))))
-            HttpParser(parserDelegate)
+    let svr = TcpServer.Create((fun (data, svr, sd) -> 
+        let parser = HttpParser(ParserDelegate(app, (fun keepAlive msg -> svr.Send(sd.RemoteEndPoint, msg, keepAlive))))
         parser.Execute(new ArraySegment<_>(data)) |> ignore))
         
     member h.Start(port) = svr.Listen(IPAddress.Loopback, port)
-
-    member h.Send(client, (response:string), keepAlive) = 
-        let encoded = Encoding.ASCII.GetBytes(response)
-        svr.Send(client, encoded, keepAlive)
 
     //ensures the listening socket is shutdown on disposal.
     member private x.Dispose(disposing) = 
