@@ -28,7 +28,6 @@ let debug (x:UnhandledExceptionEventArgs) =
 
 System.AppDomain.CurrentDomain.UnhandledException |> Observable.add debug
 let shortdate = DateTime.UtcNow.ToShortDateString
-open Fracture.Http
 
 let server = new HttpServer (fun req -> async {
     return {

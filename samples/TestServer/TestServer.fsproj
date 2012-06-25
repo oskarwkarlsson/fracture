@@ -39,9 +39,6 @@
   <Import Project="..\..\lib\FSharp\v4.0\bin\Microsoft.FSharp.Targets" />
   <ItemGroup>
     <Compile Include="Program.fs" />
-    <None Include="App.config">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
