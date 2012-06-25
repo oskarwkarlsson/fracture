@@ -38,8 +38,8 @@
     <Compile Include="PipeletsTest.fs" />
   </ItemGroup>
   <ItemGroup>
-    <Reference Include="FsUnit.NUnit">
-      <HintPath>..\..\packages\FsUnit.1.1.0.0\Lib\Net40\FsUnit.NUnit.dll</HintPath>
+    <Reference Include="FsUnit.NUnit-0.9.0">
+      <HintPath>..\..\packages\FsUnit.0.9.1\Lib\FsUnit.NUnit-0.9.0.dll</HintPath>
     </Reference>
     <Reference Include="mscorlib" />
     <Reference Include="FSharp.Core">
