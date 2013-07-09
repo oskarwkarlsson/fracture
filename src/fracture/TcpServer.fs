@@ -27,8 +27,27 @@ open SocketExtensions
 open Common
 open Threading
 
+type TcpSocket =
+    struct
+        val Connected : IObservable<IPEndPoint>
+        val Disconnected : IObservable<IPEndPoint>
+        val Received : IObservable<byte[] * TcpServer * SocketDescriptor>
+        val Sent : IObservable<byte[] * IPEndPoint>
+
+        new(connected, disconnected, received, sent) =
+            { Connected = connected
+              Disconnected = disconnected
+              Received = received
+              Sent = sent }
+    end
+
 ///Creates a new TcpServer using the specified parameters
-type TcpServer(poolSize, perOperationBufferSize, acceptBacklogCount, received, ?connected, ?disconnected, ?sent) as s=
+and TcpServer(listen, ?poolSize, ?perOperationBufferSize, ?acceptBacklogCount) as s=
+    /// PoolSize=10k, Per operation buffer=1k, accept backlog=10000
+    let poolSize = defaultArg poolSize 30000
+    let perOperationBufferSize = defaultArg perOperationBufferSize 1024
+    let acceptBacklogCount = defaultArg acceptBacklogCount 10000
+
     let pool = new BocketPool("regular pool", max poolSize 2, perOperationBufferSize)
     let connectionPool = new BocketPool("connection pool", max (acceptBacklogCount * 2) 2, perOperationBufferSize)(*Note: 288 bytes is the minimum size for a connection*)
     let clients = new ConcurrentDictionary<_,_>()
@@ -46,10 +65,18 @@ type TcpServer(poolSize, perOperationBufferSize, acceptBacklogCount, received, ?
                 connectionPool.Dispose()
             disposed <- true
 
+    let connected = Event<IPEndPoint>()
+    let connectedObs = connected.Publish :> IObservable<_>
+    let disconnected = Event<IPEndPoint>()
+    let disconnectedObs = disconnected.Publish :> IObservable<_>
+    let received = Event<byte[] * TcpServer * SocketDescriptor>()
+    let receivedObs = received.Publish :> IObservable<_>
+    let sent = Event<byte[] * IPEndPoint>()
+    let sentObs = sent.Publish :> IObservable<_>
+
     let disconnect (sd:SocketDescriptor) =
         !-- connections
-        if disconnected.IsSome then 
-            disconnected.Value sd.RemoteEndPoint
+        disconnected.Trigger sd.RemoteEndPoint
         sd.Socket.Shutdown(SocketShutdown.Both)
         if sd.Socket.Connected then sd.Socket.Disconnect(true)
 
@@ -82,7 +109,7 @@ type TcpServer(poolSize, perOperationBufferSize, acceptBacklogCount, received, ?
             //if not success then failwith "client could not be added"
 
             //trigger connected
-            connected |> Option.iter (fun x  -> x endPoint)
+            connected.Trigger endPoint
             !++ connections
             args.AcceptSocket <- null (*remove the AcceptSocket because we're reusing args*)
 
@@ -97,7 +124,7 @@ type TcpServer(poolSize, perOperationBufferSize, acceptBacklogCount, received, ?
             if args.BytesTransferred > 0 then
                 let data = acquireData args
                 //trigger received
-                received (data, s, sd)
+                received.Trigger (data, s, sd)
         
         | SocketError.OperationAborted
         | SocketError.Disconnecting when disposed -> ()// stop accepting here, we're being shutdown.
@@ -114,12 +141,12 @@ type TcpServer(poolSize, perOperationBufferSize, acceptBacklogCount, received, ?
             //process received data, check if data was given on connection.
             let data = acquireData args
             //trigger received
-            received (data, s, sd )
+            received.Trigger (data, s, sd)
             //get on with the next receive
             if socket.Connected then 
                 let saea = pool.CheckOut()
                 saea.UserToken <- sd
-                socket.ReceiveAsyncSafe( completed, saea)
+                socket.ReceiveAsyncSafe(completed, saea)
         //0 byte receive - disconnect.
         else disconnect sd
 
@@ -129,24 +156,24 @@ type TcpServer(poolSize, perOperationBufferSize, acceptBacklogCount, received, ?
         | SocketError.Success ->
             let sentData = acquireData args
             //notify data sent
-            sent |> Option.iter (fun x  -> x (sentData, sd.RemoteEndPoint))
+            sent.Trigger (sentData, sd.RemoteEndPoint)
         | SocketError.NoBufferSpaceAvailable
         | SocketError.IOPending
         | SocketError.WouldBlock ->
             failwith "Buffer overflow or send buffer timeout" //graceful termination?  
         | _ -> args.SocketError.ToString() |> printfn "socket error on send: %s"
     
-    /// PoolSize=10k, Per operation buffer=1k, accept backlog=10000
-    static member Create(received, ?connected, ?disconnected, ?sent) =
-        new TcpServer(30000, 1024, 10000, received, ?connected = connected, ?disconnected = disconnected, ?sent = sent)
-
     member s.Connections = connections
 
     ///Starts the accepting a incoming connections.
     member s.Listen(address: IPAddress, port) =
+        // Execute the listen function
+        listen(TcpSocket(connectedObs, disconnectedObs, receivedObs, sentObs))
+
         //initialise the pool
         pool.Start(completed)
         connectionPool.Start(completed)
+
         ///starts listening on the specified address and port.
         //This disables nagle
         //listeningSocket.NoDelay <- true 

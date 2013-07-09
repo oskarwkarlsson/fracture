@@ -45,6 +45,7 @@
     <Compile Include="BocketPool.fs" />
     <Compile Include="Common.fs" />
     <Compile Include="Threading.fs" />
+    <Compile Include="SocketStream.fs" />
     <Compile Include="TcpClient.fs" />
     <Compile Include="TcpServer.fs" />
     <Compile Include="RemoteAgent.fs" />
