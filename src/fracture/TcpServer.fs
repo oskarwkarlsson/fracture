@@ -27,22 +27,8 @@ open SocketExtensions
 open Common
 open Threading
 
-type TcpSocket =
-    struct
-        val Connected : IObservable<IPEndPoint>
-        val Disconnected : IObservable<IPEndPoint>
-        val Received : IObservable<byte[] * TcpServer * SocketDescriptor>
-        val Sent : IObservable<byte[] * IPEndPoint>
-
-        new(connected, disconnected, received, sent) =
-            { Connected = connected
-              Disconnected = disconnected
-              Received = received
-              Sent = sent }
-    end
-
 ///Creates a new TcpServer using the specified parameters
-and TcpServer(listen, ?poolSize, ?perOperationBufferSize, ?acceptBacklogCount) as s=
+type TcpServer(listen, ?poolSize, ?perOperationBufferSize, ?acceptBacklogCount) as s=
     /// PoolSize=10k, Per operation buffer=1k, accept backlog=10000
     let poolSize = defaultArg poolSize 30000
     let perOperationBufferSize = defaultArg perOperationBufferSize 1024

@@ -7,35 +7,31 @@ open System.Net.Sockets
 open Fracture.Common
 open Fracture.SocketExtensions
 
+type internal TcpSocket =
+    struct
+        val Received : IEvent<byte[] * SocketDescriptor>
+        val Sent : IEvent<byte[] * IPEndPoint>
+        val Send : byte[] * int * int -> unit
+
+        new(received, sent, send) =
+            { Received = received
+              Sent = sent
+              Send = send }
+    end
+
 module private Impl =
-    let asyncReceive args completed (socket: Socket) =
-        Async.FromContinuations(fun (ok, error, cancel) ->
-            socket.ReceiveAsyncSafe(completed, args)
-            ok args
-        )
-
-    let asyncSend args completed (socket: Socket) =
-        Async.FromContinuations(fun (ok, error, cancel) ->
-            socket.SendAsyncSafe(completed, args)
-            ok args
-        )
-
-    let asyncRead buffer offset count (bocketPool: BocketPool) completed socket =
-        if count = 0 then async.Return 0 else
+    let asyncRead buffer offset count (socket: TcpSocket) =
+        if count = 0 then async.Return [||] else
 
         // TODO: This type should retain the `args` whenever the caller's offset + count does not retrieve the bytes
         // stored in the `args`. Subsequent calls should then first read from the previous args, then retrieve the next.
 
         async {
-            let args = bocketPool.CheckOut()
-            args.UserToken <- socket
-            let! args = asyncReceive args completed socket
-            let bytesRead = args.BytesTransferred
-            if buffer <> args.Buffer || offset <> args.Offset || count <> args.Count then
-                Buffer.BlockCopy(args.Buffer, args.Offset, buffer, offset, bytesRead)
-            args.UserToken <- Unchecked.defaultof<_>
-            bocketPool.CheckIn(args)
-            return bytesRead
+            let! (buffer, sd) = Async.AwaitEvent <| socket.Received
+            // TODO: Move the buffer copy here
+//            if buffer <> args.Buffer || offset <> args.Offset || count <> args.Count then
+//                Buffer.BlockCopy(args.Buffer, args.Offset, buffer, offset, bytesRead)
+            return buffer
         }
 
     let asyncWrite (buffer: byte[]) offset count (bocketPool: BocketPool) perOperationBufferSize keepAlive completed socket =
@@ -77,23 +73,10 @@ module private Impl =
 
 /// A read-only stream wrapping a `Socket`.
 /// This stream does not close or dispose the underlying socket.
-type SocketStream(socket: Socket, pool: BocketPool, perOperationBufferSize, completed) as x =
+type TcpSocketStream internal (socket: TcpSocket, perOperationBufferSize, completed) as x =
     inherit System.IO.Stream()
-    do if socket = null then
-        raise <| ArgumentNullException()
-    do if not (socket.Blocking) then
-        raise <| IOException()
-    do if not (socket.Connected) then
-        raise <| IOException()
-    do if socket.SocketType <> SocketType.Stream then
-        raise <| IOException()
 
-    let remoteEndPoint = socket.RemoteEndPoint :?> IPEndPoint
     let keepAlive = ref true
-
-    // TODO: This type should probably also accept an additional, optional buffer as the first bit of data returned from a `Read`.
-    // This would allow something like an HTTP parser to restore to the `SocketReadStream` any bytes read that were not part of
-    // the HTTP headers.
 
     let mutable readTimeout = 1000
     let beginRead, endRead, _ = Async.AsBeginEnd(fun (b, o, c) -> x.AsyncRead(b, o, c))
@@ -104,8 +87,6 @@ type SocketStream(socket: Socket, pool: BocketPool, perOperationBufferSize, comp
     member x.KeepAlive
         with get() = !keepAlive
         and set(v) = keepAlive := v
-
-    member x.RemoteEndPoint = remoteEndPoint
 
     /// Reads `count` bytes from the specified `buffer` starting at the specified `offset` asynchronously.
     /// It's possible that the caller is providing a different buffer, offset, or count.

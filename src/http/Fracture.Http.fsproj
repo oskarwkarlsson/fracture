@@ -9,10 +9,11 @@
     <OutputType>Library</OutputType>
     <RootNamespace>Fracture.Http</RootNamespace>
     <AssemblyName>Fracture.Http</AssemblyName>
-    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <Name>Fracture.Http</Name>
     <FscToolPath>..\..\lib\FSharp\v4.0\bin</FscToolPath>
-    <TargetFrameworkProfile>Client</TargetFrameworkProfile>
+    <TargetFrameworkProfile>
+    </TargetFrameworkProfile>
     <RestorePackages>true</RestorePackages>
     <SolutionDir Condition="$(SolutionDir) == '' Or $(SolutionDir) == '*Undefined*'">..\..\</SolutionDir>
   </PropertyGroup>
