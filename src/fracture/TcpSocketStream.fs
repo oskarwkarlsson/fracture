@@ -10,7 +10,7 @@ open Fracture.SocketExtensions
 type internal TcpSocket =
     struct
         val Received : IEvent<byte[] * SocketDescriptor>
-        val Sent : IEvent<byte[] * IPEndPoint>
+        val Sent : IEvent<byte[] * SocketDescriptor>
         val Send : byte[] * int * int -> unit
 
         new(received, sent, send) =
@@ -94,7 +94,7 @@ type TcpSocketStream internal (socket: TcpSocket, perOperationBufferSize, comple
     /// extraneous calls to methods such as `SocketAsyncEventArgs.SetBuffer`. When possible,
     /// the caller should provide the same values as were used to create the `BocketPool`.
     member x.AsyncRead(buffer: byte[], offset, count) =
-        socket |> Impl.asyncRead buffer offset count pool completed
+        socket |> Impl.asyncRead buffer offset count
 
     /// Asynchronously writes `count` bytes to the `socket` starting at the specified `offset`
     /// from the provided `buffer`.
