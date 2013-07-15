@@ -71,7 +71,7 @@ module Request =
         | _ -> false
 
     [<CompiledName("Parse")>]
-    let parse (readStream: SocketReadStream) =
+    let parse (readStream: TcpSocketStream) =
         async {
             let env = new Env()
             // Do the parsing manually, as the reader is likely less efficient.
@@ -166,7 +166,7 @@ module Response =
       | _ -> BS"HTTP/1.1 500 Internal Server Error\r\n"B
 
     [<CompiledName("Send")>]
-    let send (env: Env, writeStream: SocketWriteStream) = async {
+    let send (env: Env, writeStream: TcpSocketStream) = async {
         // TODO: Aggregate the response pieces and send as a whole chunk.
         // Write the status line
         let statusLine = getStatusLine <| Convert.ToInt32(env.[Owin.Constants.responseStatusCode])
@@ -183,8 +183,7 @@ module Response =
 
         // Write the response body
         // TODO: Set a default timeout
-        let body = env.ResponseBody.ToArray()
-        let! _ = Async.AwaitIAsyncResult <| writeStream.WriteAsync(body, 0, body.Length)
+        let! _ = Async.AwaitIAsyncResult <| env.ResponseBody.CopyToAsync(writeStream)
         return env.Dispose()
     }
 

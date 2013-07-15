@@ -185,6 +185,9 @@ type Environment() as x =
     /// Gets the request headers dictionary for the current request.
     member x.RequestHeaders = requestHeaders
 
+    /// Gets the request body stream.
+    member x.RequestBody = x.[Constants.requestBody]
+
     /// Gets the response headers dictionary for the current response.
     member x.ResponseHeaders = responseHeaders
 

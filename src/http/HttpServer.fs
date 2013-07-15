@@ -24,34 +24,29 @@ open System.Collections.Generic
 open System.Diagnostics
 open System.Net
 open System.Text
+open Frack
 open Fracture
-open Fracture.Common
-open Fracture.Pipelets
-open FSharp.Control
-open HttpMachine
 open Owin
 
 [<Sealed>]
-type HttpServer(headers, body, requestEnd) as this = 
-    let svr = TcpServer.Create()
-    let receivedSubscription =
-        svr.OnReceived.Subscribe((fun (svr, (data, sd)) -> 
-            let parser =
-                let parserDelegate = ParserDelegate(onHeaders = (fun h -> headers(h,this,sd)), 
-                                                    requestBody = (fun data -> (body(data, svr,sd))), 
-                                                    requestEnded = (fun req -> (requestEnd(req, svr, sd))))
-                HttpParser(parserDelegate)
-            parser.Execute(new ArraySegment<_>(data)) |> ignore))
+type HttpServer(app: WebApp) as this = 
+    let svr = new TcpServer()
+    let disposable =
+        svr.OnConnected.Subscribe(fun (_, socket) ->
+            // TODO: Make this run asynchronously
+            async {
+                let! env = Request.parse socket
+                do! app env
+            }
+            |> Async.RunSynchronously
+        )
         
+    // TODO: Support more than one IP/domain, e.g. to support both http and https.
     member h.Start(port) = svr.Listen(IPAddress.Loopback, port)
-
-    member h.Send(client, (response:string), keepAlive) = 
-        let encoded = Encoding.ASCII.GetBytes(response)
-        svr.Send(client, encoded, keepAlive)
 
     /// Ensures the listening socket is shutdown on disposal.
     member h.Dispose() =
-        receivedSubscription.Dispose()
+        disposable.Dispose()
         svr.Dispose()
         GC.SuppressFinalize(this)
 
