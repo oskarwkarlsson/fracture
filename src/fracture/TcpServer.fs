@@ -29,7 +29,7 @@ open Threading
 
 ///Creates a new TcpServer using the specified parameters
     /// PoolSize=10k, Per operation buffer=1k, accept backlog=10000
-type TcpServer(listen, ?poolSize, ?perOperationBufferSize, ?acceptBacklogCount) as s =
+type TcpServer(?poolSize, ?perOperationBufferSize, ?acceptBacklogCount) as s =
     let poolSize = defaultArg poolSize 30000
     let perOperationBufferSize = defaultArg perOperationBufferSize 1024
     let acceptBacklogCount = defaultArg acceptBacklogCount 10000
@@ -106,6 +106,21 @@ type TcpServer(listen, ?poolSize, ?perOperationBufferSize, ?acceptBacklogCount) 
         //0 byte receive - disconnect.
         else disconnect sd
 
+    ///Sends the specified message to the client.
+    and send clientEndPoint keepAlive (buffer: byte[], offset, count) =
+        let success, client = clients.TryGetValue(clientEndPoint)
+        if success then 
+            let msg =
+                if offset = 0 && count = buffer.Length then buffer
+                else buffer.[offset..offset+count-1]
+            Common.send {Socket = client; RemoteEndPoint = clientEndPoint}
+                        completed
+                        pool.CheckOut
+                        perOperationBufferSize
+                        msg
+                        keepAlive
+        else failwith "could not find client %"
+
     ///This function is called on each connect,sends,receive, and disconnect
     let rec acceptCompleted (args:SocketAsyncEventArgs) =
         try
@@ -131,7 +146,8 @@ type TcpServer(listen, ?poolSize, ?perOperationBufferSize, ?acceptBacklogCount) 
             //if not success then failwith "client could not be added"
 
             //trigger connected
-            connected.Trigger(s, {Socket = acceptSocket; RemoteEndPoint = endPoint})
+            let sd = {Socket = acceptSocket; RemoteEndPoint = endPoint}
+            connected.Trigger(s, new TcpSocketStream(acceptSocket, endPoint, received.Publish |> Event.map snd, sent.Publish |> Event.map snd, send endPoint))
             !++ connections
             args.AcceptSocket <- null (*remove the AcceptSocket because we're reusing args*)
 
@@ -154,20 +170,16 @@ type TcpServer(listen, ?poolSize, ?perOperationBufferSize, ?acceptBacklogCount) 
 
     member s.Connections = connections
 
+    /// Subscribe to this event to process Socket connections.
     [<CLIEvent>]
     member s.OnConnected = connected.Publish
+
+    /// Subscribe to this event to handle client disconnections.
     [<CLIEvent>]
     member s.OnDisconnected = disconnected.Publish
-    [<CLIEvent>]
-    member s.OnReceived = received.Publish
-    [<CLIEvent>]
-    member s.OnSent = sent.Publish
 
     ///Starts the accepting a incoming connections.
     member s.Listen(address: IPAddress, port) =
-        // Execute the listen function
-        listen(s.OnReceived |> Event.map snd, s.OnSent |> Event.map snd, s.Send)
-
         //initialise the pool
         pool.Start(completed)
         connectionPool.Start(acceptCompleted)
@@ -180,13 +192,6 @@ type TcpServer(listen, ?poolSize, ?perOperationBufferSize, ?acceptBacklogCount) 
         for i in 1 .. acceptBacklogCount do
             listeningSocket.AcceptAsyncSafe(completed, connectionPool.CheckOut())
 
-    ///Sends the specified message to the client.
-    member s.Send(clientEndPoint, msg, keepAlive) =
-        let success, client = clients.TryGetValue(clientEndPoint)
-        if success then 
-            send {Socket = client;RemoteEndPoint = clientEndPoint} completed pool.CheckOut perOperationBufferSize msg keepAlive
-        else failwith "could not find client %"
-        
     member s.Dispose() =
         cleanUp true
         GC.SuppressFinalize(s)
