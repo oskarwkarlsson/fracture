@@ -178,6 +178,26 @@ module Response =
                 let headerBytes = BS(Encoding.ASCII.GetBytes(sprintf "%s: %s\r\n" header value))
                 do! writeStream.AsyncWrite(headerBytes.Array, headerBytes.Offset, headerBytes.Count)
 
+        // Append the Connection header if we should close the connection.
+        if not <| Request.shouldKeepAlive env && not <| env.ResponseHeaders.ContainsKey("Connection") then
+            let connectionHeader = BS("Connection: close\r\n"B)
+            do! writeStream.AsyncWrite(connectionHeader.Array, connectionHeader.Offset, connectionHeader.Count)
+
+        // Append the Content-Length header if it is missing.
+        // TODO: Don't do this if using chunked encoding.
+        if not <| env.ResponseHeaders.ContainsKey("Content-Length") then
+            let length =
+                if env.ResponseBody = Unchecked.defaultof<_> then 0L
+                else env.ResponseBody.Length
+            let contentLengthHeader = BS(Encoding.ASCII.GetBytes(sprintf "Content-Length: %d\r\n" length))
+            do! writeStream.AsyncWrite(contentLengthHeader.Array, contentLengthHeader.Offset, contentLengthHeader.Count)
+
+        // Append the Date header if it is missing.
+        if not <| env.ResponseHeaders.ContainsKey("Date") then
+            let date = DateTime.UtcNow.ToString("r")
+            let dateHeader = BS(Encoding.ASCII.GetBytes(sprintf "Date: %s\r\n" date))
+            do! writeStream.AsyncWrite(dateHeader.Array, dateHeader.Offset, dateHeader.Count)
+
         // Write the body separator
         do! writeStream.AsyncWrite("\r\n"B, 0, 2)
 

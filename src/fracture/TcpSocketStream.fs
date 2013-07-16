@@ -87,7 +87,7 @@ type TcpSocketStream internal (socket: Socket, endPoint: IPEndPoint, received: I
     override x.CanRead = true
     override x.CanSeek = false
     override x.CanWrite = true
-    override x.Flush() = raise <| NotSupportedException()
+    override x.Flush() = () // nop; should this signal completion?
     override x.Length = raise <| NotSupportedException()
     override x.Position
         with get() = raise <| NotSupportedException()

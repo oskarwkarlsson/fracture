@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //----------------------------------------------------------------------------
-namespace Fracture.Http
+namespace Frack
 #nowarn "40"
 
 open System
@@ -30,24 +30,24 @@ open Owin
 
 [<Sealed>]
 type HttpServer(app: WebApp) as this = 
-    let svr = new TcpServer()
+    let run socket = async {
+        let! env = Request.parse socket
+        do! app env
+    }
+    let server = new TcpServer()
     let disposable =
-        svr.OnConnected.Subscribe(fun (_, socket) ->
-            // TODO: Make this run asynchronously
-            async {
-                let! env = Request.parse socket
-                do! app env
-            }
-            |> Async.RunSynchronously
+        server.OnConnected.Subscribe(fun (_, socket) ->
+            // TODO: Consider Async.StartWithContinuations
+            Async.Start <| run socket
         )
         
     // TODO: Support more than one IP/domain, e.g. to support both http and https.
-    member h.Start(port) = svr.Listen(IPAddress.Loopback, port)
+    member h.Start(port) = server.Listen(IPAddress.Loopback, port)
 
     /// Ensures the listening socket is shutdown on disposal.
     member h.Dispose() =
         disposable.Dispose()
-        svr.Dispose()
+        server.Dispose()
         GC.SuppressFinalize(this)
 
     interface IDisposable with

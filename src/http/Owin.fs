@@ -206,7 +206,7 @@ type Environment() as x =
     interface IDisposable with
         member x.Dispose() = x.Dispose()
 
-type WebApp = IDictionary<string, obj> -> Async<unit>
+type WebApp = Environment -> Async<unit>
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module WebApp =
